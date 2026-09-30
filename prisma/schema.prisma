@@ -1,0 +1,471 @@
+// BoxKhel Prisma PostgreSQL Schema with PostGIS support
+// Spec Reference: docs/box-cricket-platform-docs.md (Section 7)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum UserRole {
+  PLAYER
+  OWNER
+  ADMIN
+}
+
+enum PlayingRole {
+  BATSMAN
+  BOWLER
+  ALL_ROUNDER
+  WICKET_KEEPER
+}
+
+enum SkillLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+  PRO
+}
+
+enum TurfType {
+  OPEN
+  CLOSED
+  THREE_SIXTY
+}
+
+enum GroundStatus {
+  PENDING
+  VERIFIED
+  SUSPENDED
+}
+
+enum AdvanceType {
+  PERCENT
+  FIXED
+}
+
+enum BookingStatus {
+  HELD
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum PaymentStatus {
+  UNPAID
+  ADVANCE_PAID
+  FULLY_PAID
+  REFUND_DUE
+  REFUNDED
+}
+
+enum LedgerStatus {
+  WAIVED
+  ACCRUED
+  INVOICED
+  PAID
+}
+
+enum PostStatus {
+  ACTIVE
+  EXPIRED
+  MATCHED
+}
+
+enum TeamPostStatus {
+  OPEN
+  FILLED
+  CLOSED
+}
+
+enum RequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+enum ChallengeStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  COUNTERED
+  COMPLETED
+}
+
+// ----------------------------------------------------
+// 1. Users & Player Profiles
+// ----------------------------------------------------
+
+model User {
+  id            String         @id @default(uuid())
+  phone         String         @unique
+  name          String
+  role          UserRole       @default(PLAYER)
+  photoUrl      String?        @map("photo_url")
+  city          String         @default("Surat")
+  isBlocked     Boolean        @default(false) @map("is_blocked")
+  feeFreeUntil  DateTime?      @map("fee_free_until") // 3 months 0% platform fee trial
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  playerProfile PlayerProfile?
+  grounds       Ground[]       @relation("OwnerGrounds")
+  bookings      Booking[]
+  availPosts    AvailabilityPost[]
+  joinRequestsSent     JoinRequest[] @relation("SenderRequests")
+  joinRequestsReceived JoinRequest[] @relation("ReceiverRequests")
+  reviews       Review[]
+  notifications Notification[]
+  teamMemberships TeamMember[]
+  captainedTeams  Team[]       @relation("TeamCaptain")
+  ledgerItems   PlatformFeeLedger[]
+
+  @@map("users")
+}
+
+model PlayerProfile {
+  userId        String       @id @map("user_id")
+  playingRole   PlayingRole  @default(ALL_ROUNDER) @map("playing_role")
+  skillLevel    SkillLevel   @default(INTERMEDIATE) @map("skill_level")
+  homeArea      String?      @map("home_area")
+  lat           Float?
+  lng           Float?
+
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("player_profiles")
+}
+
+// ----------------------------------------------------
+// 2. Grounds & Boxes (Turf Units)
+// ----------------------------------------------------
+
+model Ground {
+  id               String                @id @default(uuid())
+  ownerId          String                @map("owner_id")
+  name             String
+  description      String                @db.Text
+  phone            String
+  addressLine      String                @map("address_line")
+  area             String                // e.g. "Mota Varachha", "Adajan", "Vesu"
+  city             String                @default("Surat")
+  state            String                @default("Gujarat")
+  pincode          String
+  lat              Float
+  lng              Float
+  amenities        Json                  @default("[]")
+  status           GroundStatus          @default(PENDING)
+  createdByAdminId String?               @map("created_by_admin_id")
+  avgRating        Float                 @default(5.0) @map("avg_rating")
+  totalReviews     Int                   @default(0) @map("total_reviews")
+  images           Json                  @default("[]") // Array of image URLs
+  createdAt        DateTime              @default(now()) @map("created_at")
+  updatedAt        DateTime              @updatedAt @map("updated_at")
+
+  owner            User                  @relation("OwnerGrounds", fields: [ownerId], references: [id], onDelete: Cascade)
+  boxes            Box[]
+  paymentSettings  OwnerPaymentSettings?
+  bookings         Booking[]
+  reviews          Review[]
+  offlineBlocks    BoxBlock[]
+
+  @@index([area])
+  @@index([city])
+  @@map("grounds")
+}
+
+model Box {
+  id           String        @id @default(uuid())
+  groundId     String        @map("ground_id")
+  name         String        // "Box A", "Box B"
+  type         TurfType      @default(THREE_SIXTY)
+  widthFt      Int           @map("width_ft")
+  heightFt     Int           @map("height_ft")
+  maxPlayers   Int           @default(14) @map("max_players")
+  basePrice    Int           @map("base_price") // Hourly base rate
+  slotMinutes  Int           @default(60) @map("slot_minutes")
+  images       Json          @default("[]")
+  isActive     Boolean       @default(true) @map("is_active")
+
+  ground       Ground        @relation(fields: [groundId], references: [id], onDelete: Cascade)
+  schedules    BoxSchedule[]
+  blocks       BoxBlock[]
+  bookings     Booking[]
+
+  @@map("boxes")
+}
+
+model BoxSchedule {
+  id            String   @id @default(uuid())
+  boxId         String   @map("box_id")
+  dayOfWeek     Int      @map("day_of_week") // 0=Sun, 1=Mon, ..., 6=Sat
+  openTime      String   @map("open_time")   // "06:00"
+  closeTime     String   @map("close_time")  // "02:00"
+  priceOverride Int?     @map("price_override")
+
+  box           Box      @relation(fields: [boxId], references: [id], onDelete: Cascade)
+
+  @@map("box_schedules")
+}
+
+model BoxBlock {
+  id        String   @id @default(uuid())
+  boxId     String   @map("box_id")
+  groundId  String   @map("ground_id")
+  date      String   // YYYY-MM-DD
+  startTime String   @map("start_time") // "18:00"
+  endTime   String   @map("end_time")   // "19:00"
+  reason    String   // "Walk-in phone booking"
+
+  box       Box      @relation(fields: [boxId], references: [id], onDelete: Cascade)
+  ground    Ground   @relation(fields: [groundId], references: [id], onDelete: Cascade)
+
+  @@map("box_blocks")
+}
+
+// ----------------------------------------------------
+// 3. Payment Settings & Direct UPI Settlements
+// ----------------------------------------------------
+
+model OwnerPaymentSettings {
+  groundId       String      @id @map("ground_id")
+  upiId          String      @map("upi_id")
+  upiName        String      @map("upi_name")
+  qrImageUrl     String      @map("qr_image_url")
+  advanceEnabled Boolean     @default(false) @map("advance_enabled")
+  advanceType    AdvanceType @default(PERCENT) @map("advance_type")
+  advanceValue   Int         @default(30) @map("advance_value")
+  refundTiers    Json        @default("[{\"hoursBefore\": 12, \"refundPercent\": 30}, {\"hoursBefore\": 3, \"refundPercent\": 20}, {\"hoursBefore\": 0, \"refundPercent\": 0}]") @map("refund_tiers")
+
+  ground         Ground      @relation(fields: [groundId], references: [id], onDelete: Cascade)
+
+  @@map("owner_payment_settings")
+}
+
+// ----------------------------------------------------
+// 4. Bookings & Platform Ledger
+// ----------------------------------------------------
+
+model Booking {
+  id                   String        @id // e.g. "BK-2026-8801"
+  boxId                String        @map("box_id")
+  groundId             String        @map("ground_id")
+  playerId             String        @map("player_id")
+  teamId               String?       @map("team_id")
+  date                 String        // YYYY-MM-DD
+  startTime            String        @map("start_time")
+  endTime              String        @map("end_time")
+  totalAmount          Int           @map("total_amount")
+  advanceAmount        Int           @default(0) @map("advance_amount")
+  balanceAmount        Int           @map("balance_amount")
+  paymentStatus        PaymentStatus @default(UNPAID) @map("payment_status")
+  status               BookingStatus @default(CONFIRMED)
+  refundPolicySnapshot Json          @map("refund_policy_snapshot")
+  utr                  String?       // Unique UPI Transaction ID
+  advanceVerified      Boolean       @default(false) @map("advance_verified")
+  holdExpiresAt        DateTime?     @map("hold_expires_at")
+  cancellationReason   String?       @map("cancellation_reason")
+  refundAmount         Int?          @map("refund_amount")
+  createdAt            DateTime      @default(now()) @map("created_at")
+
+  box                  Box           @relation(fields: [boxId], references: [id])
+  ground               Ground        @relation(fields: [groundId], references: [id])
+  player               User          @relation(fields: [playerId], references: [id])
+  review               Review?
+
+  @@index([boxId, date, startTime])
+  @@map("bookings")
+}
+
+model PlatformFeeLedger {
+  id            String       @id @default(uuid())
+  ownerId       String       @map("owner_id")
+  bookingId     String       @map("booking_id")
+  groundName    String       @map("ground_name")
+  bookingAmount Int          @map("booking_amount")
+  feePercent    Int          @default(5) @map("fee_percent")
+  feeAmount     Int          @map("fee_amount")
+  status        LedgerStatus @default(ACCRUED)
+  periodMonth   String       @map("period_month") // "2026-10"
+  createdAt     DateTime     @default(now()) @map("created_at")
+
+  owner         User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@map("platform_fee_ledger")
+}
+
+// ----------------------------------------------------
+// 5. Matchmaking: Availability & Team Posts
+// ----------------------------------------------------
+
+model AvailabilityPost {
+  id         String     @id @default(uuid())
+  playerId   String     @map("player_id")
+  role       PlayingRole
+  skill      SkillLevel
+  date       String
+  timeWindow String     @map("time_window")
+  centerArea String     @map("center_area")
+  lat        Float
+  lng        Float
+  radiusKm   Int        @default(5) @map("radius_km")
+  note       String?    @db.Text
+  status     PostStatus @default(ACTIVE)
+  createdAt  DateTime   @default(now()) @map("created_at")
+
+  player     User       @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@map("availability_posts")
+}
+
+model TeamPost {
+  id            String         @id @default(uuid())
+  teamId        String         @map("team_id")
+  teamName      String         @map("team_name")
+  captainId     String         @map("captain_id")
+  captainName   String         @map("captain_name")
+  captainPhone  String         @map("captain_phone")
+  groundName    String         @map("ground_name")
+  area          String
+  lat           Float
+  lng           Float
+  neededPlayers Int            @map("needed_players")
+  date          String
+  time          String
+  note          String?        @db.Text
+  status        TeamPostStatus @default(OPEN)
+  createdAt     DateTime       @default(now()) @map("created_at")
+
+  @@map("team_posts")
+}
+
+model JoinRequest {
+  id            String        @id @default(uuid())
+  targetPostId  String        @map("target_post_id")
+  postType      String        @map("post_type") // "AVAILABILITY" | "TEAM_POST"
+  senderId      String        @map("sender_id")
+  receiverId    String        @map("receiver_id")
+  message       String?
+  rejectMessage String?       @map("reject_message")
+  status        RequestStatus @default(PENDING)
+  createdAt     DateTime      @default(now()) @map("created_at")
+
+  sender        User          @relation("SenderRequests", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver      User          @relation("ReceiverRequests", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@map("join_requests")
+}
+
+// ----------------------------------------------------
+// 6. Teams & Friendly Challenges
+// ----------------------------------------------------
+
+model Team {
+  id            String       @id @default(uuid())
+  name          String
+  captainId     String       @map("captain_id")
+  logoUrl       String?      @map("logo_url")
+  city          String       @default("Surat")
+  area          String
+  matchesPlayed Int          @default(0) @map("matches_played")
+  matchesWon    Int          @default(0) @map("matches_won")
+  createdAt     DateTime     @default(now()) @map("created_at")
+
+  captain       User         @relation("TeamCaptain", fields: [captainId], references: [id])
+  members       TeamMember[]
+
+  @@map("teams")
+}
+
+model TeamMember {
+  id       String      @id @default(uuid())
+  teamId   String      @map("team_id")
+  userId   String      @map("user_id")
+  name     String
+  phone    String
+  role     PlayingRole @default(ALL_ROUNDER)
+  joinedAt DateTime    @default(now()) @map("joined_at")
+
+  team     Team        @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user     User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("team_members")
+}
+
+model Challenge {
+  id               String          @id @default(uuid())
+  fromTeamId       String          @map("from_team_id")
+  fromTeamName     String          @map("from_team_name")
+  fromCaptainName  String          @map("from_captain_name")
+  fromCaptainPhone String          @map("from_captain_phone")
+  toTeamId         String          @map("to_team_id")
+  toTeamName       String          @map("to_team_name")
+  toCaptainName    String          @map("to_captain_name")
+  toCaptainPhone   String          @map("to_captain_phone")
+  date             String
+  time             String
+  overs            Int             @default(8)
+  groundName       String?         @map("ground_name")
+  status           ChallengeStatus @default(PENDING)
+  counterDate      String?         @map("counter_date")
+  counterTime      String?         @map("counter_time")
+  matchResult      Json?           @map("match_result")
+  createdAt        DateTime        @default(now()) @map("created_at")
+
+  @@map("challenges")
+}
+
+// ----------------------------------------------------
+// 7. Reviews, Notifications & Admin Logs
+// ----------------------------------------------------
+
+model Review {
+  id         String   @id @default(uuid())
+  bookingId  String   @unique @map("booking_id")
+  groundId   String   @map("ground_id")
+  playerId   String   @map("player_id")
+  rating     Int      // 1 to 5
+  comment    String   @db.Text
+  photos     Json     @default("[]")
+  ownerReply String?  @map("owner_reply") @db.Text
+  isHidden   Boolean  @default(false) @map("is_hidden")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  booking    Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  ground     Ground   @relation(fields: [groundId], references: [id], onDelete: Cascade)
+  player     User     @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@map("reviews")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  title     String
+  message   String
+  type      String   // "BOOKING", "PAYMENT", "REQUEST", "CHALLENGE"
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+model AdminAuditLog {
+  id         String   @id @default(uuid())
+  adminId    String   @map("admin_id")
+  adminName  String   @map("admin_name")
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id")
+  details    String   @db.Text
+  timestamp  DateTime @default(now())
+
+  @@map("admin_audit_logs")
+}
