@@ -105,7 +105,8 @@ export const Header: React.FC = () => {
           {isAuthenticated ? (
             <Link
               href="/profile"
-              className="relative rounded-full ring-2 ring-emerald-600/30 hover:ring-emerald-600 transition-all overflow-hidden"
+              className="relative rounded-full ring-2 ring-emerald-600/40 hover:ring-emerald-600 transition-all overflow-hidden flex-shrink-0"
+              title="My Profile"
             >
               <img
                 src={currentUser.photoUrl || "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100"}
@@ -114,13 +115,13 @@ export const Header: React.FC = () => {
               />
             </Link>
           ) : (
-            <button
-              onClick={() => setIsAuthModalOpen(true)}
-              className="w-8 h-8 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-800 font-bold text-xs flex items-center justify-center shadow-sm"
+            <Link
+              href="/login"
+              className="px-3 py-1.5 rounded-full stitch-btn-orange text-xs font-bold shadow-sm"
               title="Sign In"
             >
-              {currentUser.name.charAt(0)}
-            </button>
+              Sign In
+            </Link>
           )}
         </div>
       </div>

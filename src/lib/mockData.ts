@@ -59,6 +59,35 @@ export const MOCK_USERS: User[] = [
   }
 ];
 
+export const AMENITY_OPTIONS = [
+  { id: 'Night Floodlights', name: 'Night Floodlights', guj: 'રાત્રિ ફ્લડલાઇટ્સ', icon: '💡' },
+  { id: 'Air-Cooled Dugout', name: 'Air-Cooled Dugout', guj: 'કૂલિંગ પેવેલિયન / ડગઆઉટ', icon: '❄️' },
+  { id: 'Dedicated Car & Bike Parking', name: 'Dedicated Car & Bike Parking', guj: 'પાર્કિંગ સુવિધા', icon: '🚗' },
+  { id: 'Chilled RO Drinking Water', name: 'Chilled RO Drinking Water', guj: 'પીવાનું ઠંડુ RO પાણી', icon: '💧' },
+  { id: 'Changing Rooms & Clean Restroom', name: 'Changing Rooms & Clean Restroom', guj: 'ચેન્જિંગ રૂમ & ટોયલેટ', icon: '🚻' },
+  { id: 'Live Scoreboard Screen', name: 'Live Scoreboard Screen', guj: 'લાઇવ સ્કોર ડિસ્પ્લે સ્ક્રીન', icon: '📺' },
+  { id: 'Bat & Ball Rental Included', name: 'Bat & Ball Rental Included', guj: 'બેટ અને બોલ ઉપલબ્ધ', icon: '🏏' },
+  { id: 'Canteen & Refreshments', name: 'Canteen & Refreshments', guj: 'કેન્ટીન અને નાસ્તો', icon: '☕' },
+  { id: 'Power Generator Backup', name: 'Power Generator Backup', guj: 'જનરેટર પાવર બેકઅપ', icon: '⚡' },
+  { id: 'First Aid Kit', name: 'First Aid Safety Kit', guj: 'પ્રાથમિક સારવાર કીટ', icon: '🩹' },
+];
+
+export const normalizeAmenity = (name: string): string => {
+  if (!name) return '';
+  const clean = name.trim().toLowerCase();
+  if (clean.includes('floodlight') || clean.includes('light')) return 'Night Floodlights';
+  if (clean.includes('dugout') || clean.includes('pavilion')) return 'Air-Cooled Dugout';
+  if (clean.includes('park') || clean.includes('car') || clean.includes('bike')) return 'Dedicated Car & Bike Parking';
+  if (clean.includes('water') || clean.includes('ro') || clean.includes('chilled')) return 'Chilled RO Drinking Water';
+  if (clean.includes('changing') || clean.includes('washroom') || clean.includes('restroom') || clean.includes('toilet')) return 'Changing Rooms & Clean Restroom';
+  if (clean.includes('screen') || clean.includes('score')) return 'Live Scoreboard Screen';
+  if (clean.includes('bat') || clean.includes('ball') || clean.includes('rental')) return 'Bat & Ball Rental Included';
+  if (clean.includes('canteen') || clean.includes('refreshment') || clean.includes('snack')) return 'Canteen & Refreshments';
+  if (clean.includes('generator') || clean.includes('power')) return 'Power Generator Backup';
+  if (clean.includes('aid') || clean.includes('safety') || clean.includes('kit') || clean.includes('medical')) return 'First Aid Kit';
+  return name.trim();
+};
+
 export const MOCK_GROUNDS: Ground[] = [
   {
     id: 'ground_1',
@@ -77,11 +106,8 @@ export const MOCK_GROUNDS: Ground[] = [
     lng: 72.8890,
     amenities: [
       'Night Floodlights',
-      'Air-Cooled Dugout',
-      'RO Drinking Water',
-      'Dedicated Car Parking',
-      'Changing Rooms',
-      'Live Scoreboard Screen',
+      'Dedicated Car & Bike Parking',
+      'Chilled RO Drinking Water',
       'Bat & Ball Rental Included'
     ],
     status: 'VERIFIED',

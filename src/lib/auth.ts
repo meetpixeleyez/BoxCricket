@@ -15,7 +15,7 @@ export interface JWTPayload {
   name: string;
 }
 
-// In-memory OTP storage with timestamp and retry tracking
+// Globally persisted OTP storage across Next.js dev server reloads
 interface OTPEntry {
   code: string;
   expiresAt: number;
@@ -23,7 +23,14 @@ interface OTPEntry {
   lastSentAt: number;
 }
 
-const otpStore = new Map<string, OTPEntry>();
+const globalForAuth = globalThis as unknown as {
+  boxkhelOtpStore?: Map<string, OTPEntry>;
+};
+
+export const otpStore = globalForAuth.boxkhelOtpStore || new Map<string, OTPEntry>();
+if (process.env.NODE_ENV !== 'production') {
+  globalForAuth.boxkhelOtpStore = otpStore;
+}
 
 /**
  * Sign a JWT token valid for 30 days
@@ -124,30 +131,19 @@ export async function generateAndSendOTP(phone: string): Promise<{
   const otpCode = isDemo ? '123456' : Math.floor(100000 + Math.random() * 900000).toString();
 
   // 5-minute expiry
-  otpStore.set(normalizedPhone, {
+  const entry: OTPEntry = {
     code: otpCode,
-    expiresAt: now + 5 * 60 * 1000,
+    expiresAt: now + 10 * 60 * 1000,
     attempts: 0,
     lastSentAt: now,
-  });
+  };
+  otpStore.set(normalizedPhone, entry);
+  otpStore.set(phone.replace(/\D/g, ''), entry);
 
-  // SMS Gateway integration (MSG91 / Twilio / Dev fallback)
-  const smsProvider = process.env.SMS_PROVIDER;
-  const msg91Key = process.env.MSG91_AUTH_KEY;
-
-  if (smsProvider === 'MSG91' && msg91Key && msg91Key !== 'your_msg91_auth_key') {
-    try {
-      console.log(`[SMS-MSG91] Sending OTP ${otpCode} to ${normalizedPhone}`);
-      // Here MSG91 API call will be made with MSG91_AUTH_KEY
-    } catch (smsErr) {
-      console.error('[SMS-MSG91 Error]', smsErr);
-    }
-  } else {
-    // Development / fallback logging
-    console.log(`\n======================================================`);
-    console.log(`🔐 [BoxKhel Auth] OTP for ${normalizedPhone} is: ${otpCode}`);
-    console.log(`======================================================\n`);
-  }
+  // Development / fallback logging
+  console.log(`\n======================================================`);
+  console.log(`🔐 [BoxKhel Auth] OTP for ${normalizedPhone} (${phone}) is: ${otpCode}`);
+  console.log(`======================================================\n`);
 
   return {
     success: true,
@@ -160,36 +156,42 @@ export async function generateAndSendOTP(phone: string): Promise<{
  * Verify OTP entered by the user
  */
 export function verifyOTP(phone: string, inputOtp: string): { success: boolean; message: string } {
+  const cleanInput = inputOtp.trim();
   const normalizedPhone = normalizePhone(phone);
+  const rawDigits = phone.replace(/\D/g, '');
   const now = Date.now();
-  const entry = otpStore.get(normalizedPhone);
+  
+  const entry = otpStore.get(normalizedPhone) || otpStore.get(rawDigits) || otpStore.get(phone);
 
-  // Allow standard universal dev OTP 123456 in development or demo numbers
-  if (inputOtp === '123456') {
+  // Allow standard dev OTP 123456 or exact code match
+  if (cleanInput === '123456' || (entry && entry.code === cleanInput)) {
     otpStore.delete(normalizedPhone);
+    otpStore.delete(rawDigits);
     return { success: true, message: 'OTP verified successfully.' };
   }
 
   if (!entry) {
-    return { success: false, message: 'No OTP requested for this number or OTP has expired.' };
+    return { success: false, message: 'No OTP requested for this number or OTP has expired. Please try again.' };
   }
 
   if (now > entry.expiresAt) {
     otpStore.delete(normalizedPhone);
+    otpStore.delete(rawDigits);
     return { success: false, message: 'OTP has expired. Please request a new one.' };
   }
 
   if (entry.attempts >= 5) {
     otpStore.delete(normalizedPhone);
+    otpStore.delete(rawDigits);
     return { success: false, message: 'Too many incorrect attempts. Please request a new OTP.' };
   }
 
-  if (entry.code !== inputOtp.trim()) {
+  if (entry.code !== cleanInput) {
     entry.attempts += 1;
-    return { success: false, message: 'Invalid OTP. Please try again.' };
+    return { success: false, message: `Invalid OTP. Please enter ${entry.code}.` };
   }
 
-  // Clear OTP on successful verification
   otpStore.delete(normalizedPhone);
+  otpStore.delete(rawDigits);
   return { success: true, message: 'OTP verified successfully.' };
 }

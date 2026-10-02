@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
 import { 
   Camera, 
@@ -18,12 +19,16 @@ import {
   Save, 
   Edit3,
   CheckCircle2,
-  Sparkles
+  Sparkles,
+  LogOut,
+  LogIn,
+  ShieldCheck
 } from 'lucide-react';
 import { PlayingRole, SkillLevel } from '@/types';
 
 export default function ProfilePage() {
-  const { currentUser, setCurrentUser, language, setLanguage, logout } = useApp();
+  const router = useRouter();
+  const { currentUser, setCurrentUser, isAuthenticated, language, setLanguage, logout } = useApp();
 
   const [name, setName] = useState(currentUser.name || 'Hardik Patel');
   const [playingRole, setPlayingRole] = useState<PlayingRole>(currentUser.playingRole || 'ALL_ROUNDER');
@@ -38,6 +43,15 @@ export default function ProfilePage() {
   ]);
 
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  React.useEffect(() => {
+    if (currentUser) {
+      setName(currentUser.name || 'Hardik Patel');
+      setPlayingRole(currentUser.playingRole || 'ALL_ROUNDER');
+      setSkillLevel(currentUser.skillLevel || 'INTERMEDIATE');
+    }
+  }, [currentUser]);
 
   const handleSave = () => {
     setCurrentUser({
@@ -50,6 +64,12 @@ export default function ProfilePage() {
     setTimeout(() => setSavedSuccess(false), 3000);
   };
 
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    await logout();
+    router.push('/login');
+  };
+
   const removeGround = (id: string) => {
     setPreferredGrounds(prev => prev.filter(g => g.id !== id));
   };
@@ -57,6 +77,23 @@ export default function ProfilePage() {
   return (
     <div className="p-4 space-y-5 pb-28">
       
+      {/* Guest Login Banner if not authenticated */}
+      {!isAuthenticated && (
+        <div className="p-4 rounded-3xl bg-amber-50 border border-amber-200 flex items-center justify-between shadow-sm">
+          <div>
+            <div className="text-xs font-bold text-slate-900">You are browsing as Guest</div>
+            <div className="text-[10px] text-slate-500">Sign in to save matches and receive WhatsApp alerts</div>
+          </div>
+          <Link
+            href="/login"
+            className="px-3.5 py-2 stitch-btn-orange text-xs flex items-center space-x-1 flex-shrink-0"
+          >
+            <LogIn className="w-3.5 h-3.5" />
+            <span>Sign In</span>
+          </Link>
+        </div>
+      )}
+
       {/* 1. Progress Header */}
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
@@ -91,7 +128,8 @@ export default function ProfilePage() {
         </div>
 
         <h2 className="text-lg font-black text-slate-900">{name}</h2>
-        <div className="inline-flex items-center space-x-1 px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold mt-1">
+        <div className="text-xs text-slate-500 font-medium mt-0.5">{currentUser.phone}</div>
+        <div className="inline-flex items-center space-x-1 px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold mt-2">
           <MapPin className="w-3.5 h-3.5 text-slate-400" />
           <span>Mota Varachha, Surat</span>
         </div>
@@ -330,7 +368,7 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* 9. Big Bottom Action Button */}
+      {/* 9. Save Button */}
       <button
         onClick={handleSave}
         className="w-full py-4 stitch-btn-orange text-sm flex items-center justify-center space-x-2 shadow-lg cursor-pointer"
@@ -338,6 +376,20 @@ export default function ProfilePage() {
         <Save className="w-4 h-4" />
         <span>Save & Update Profile</span>
       </button>
+
+      {/* 10. Dedicated Logout Button */}
+      {isAuthenticated && (
+        <div className="pt-2">
+          <button
+            onClick={handleLogout}
+            disabled={loggingOut}
+            className="w-full py-3.5 rounded-2xl bg-white hover:bg-rose-50 border border-rose-200 text-rose-700 font-bold text-xs flex items-center justify-center space-x-2 shadow-sm transition-colors cursor-pointer"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>{loggingOut ? 'Logging Out...' : 'Log Out of BoxKhel'}</span>
+          </button>
+        </div>
+      )}
 
     </div>
   );

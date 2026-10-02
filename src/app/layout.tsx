@@ -2,8 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { AppProvider } from "@/context/AppContext";
-import { Header } from "@/components/Header";
-import { Navigation } from "@/components/Navigation";
+import { AppLayoutWrapper } from "@/components/AppLayoutWrapper";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -29,13 +28,9 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${inter.className} bg-slate-100 text-slate-900 min-h-screen flex justify-center selection:bg-emerald-500 selection:text-white`}>
         <AppProvider>
-          <div className="app-container">
-            <Header />
-            <main className="flex-1 pb-24">
-              {children}
-            </main>
-            <Navigation />
-          </div>
+          <AppLayoutWrapper>
+            {children}
+          </AppLayoutWrapper>
         </AppProvider>
       </body>
     </html>

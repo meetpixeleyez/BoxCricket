@@ -379,7 +379,7 @@ export const SlotPickerModal: React.FC<SlotPickerModalProps> = ({
                           ? 'bg-orange-50 text-orange-800'
                           : 'bg-slate-100 text-slate-600'
                       }`}>
-                        {s.tagType === 'prime' ? 'Prime Floodlight' : s.tagType === 'popular' ? 'Popular' : s.tagType === 'late' ? 'Late Night' : 'Standard'}
+                        {s.tagType === 'prime' ? 'Night Floodlight' : s.tagType === 'popular' ? 'Popular' : s.tagType === 'late' ? 'Late Night' : 'Standard'}
                       </span>
                     </div>
                   </button>

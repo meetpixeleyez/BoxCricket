@@ -26,11 +26,10 @@ import {
   MOCK_TEAMS,
   MOCK_CHALLENGES,
   MOCK_REVIEWS,
-  MOCK_LEDGER
+  MOCK_LEDGER,
+  normalizeAmenity
 } from '@/lib/mockData';
 import { translations, Language } from '@/lib/translations';
-
-import { AuthModal } from '@/components/AuthModal';
 
 interface OfflineBlock {
   id: string;
@@ -47,6 +46,8 @@ interface AppContextType {
   setCurrentUser: (user: User) => void;
   switchRole: (role: UserRole) => void;
   isAuthenticated: boolean;
+  setIsAuthenticated: (auth: boolean) => void;
+  isInitializing: boolean;
   isAuthModalOpen: boolean;
   setIsAuthModalOpen: (open: boolean) => void;
   logout: () => Promise<void>;
@@ -54,6 +55,10 @@ interface AppContextType {
   setLanguage: (lang: Language) => void;
   t: typeof translations['en'];
   
+  // Global Localities Catalog
+  localities: string[];
+  addLocality: (newLocality: string) => { name: string; alreadyExisted: boolean };
+
   // Grounds
   grounds: Ground[];
   addGround: (ground: Omit<Ground, 'id' | 'createdAt' | 'avgRating' | 'totalReviews'>) => Ground;
@@ -123,8 +128,38 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState<User>(MOCK_USERS[0]); // Default fallback
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isInitializing, setIsInitializing] = useState<boolean>(true);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const savedAuth = localStorage.getItem('boxkhel_auth');
+      if (savedAuth !== null) {
+        return savedAuth === 'true';
+      }
+    }
+    return false; // Default strictly to unauthenticated
+  });
+
+  const [currentUser, setCurrentUser] = useState<User>(() => {
+    if (typeof window !== 'undefined') {
+      const savedUser = localStorage.getItem('boxkhel_user');
+      if (savedUser) {
+        try {
+          return JSON.parse(savedUser);
+        } catch (e) {}
+      }
+    }
+    return MOCK_USERS[0];
+  });
+
+  const updateCurrentUser = (user: User) => {
+    setCurrentUser(user);
+    setIsAuthenticated(true);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('boxkhel_user', JSON.stringify(user));
+      localStorage.setItem('boxkhel_auth', 'true');
+    }
+  };
+
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
   const [language, setLanguage] = useState<Language>('en');
 
@@ -137,7 +172,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (data.success && data.authenticated && data.user) {
           setIsAuthenticated(true);
           const profile = data.user.playerProfile;
-          setCurrentUser({
+          const userObj: User = {
             id: data.user.id,
             phone: data.user.phone,
             name: data.user.name,
@@ -149,10 +184,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             skillLevel: profile?.skillLevel || 'INTERMEDIATE',
             homeArea: profile?.homeArea || 'Adajan',
             createdAt: new Date().toISOString(),
-          });
+          };
+          setCurrentUser(userObj);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('boxkhel_user', JSON.stringify(userObj));
+            localStorage.setItem('boxkhel_auth', 'true');
+          }
+        } else {
+          // If server says unauthenticated and no explicit client auth
+          if (typeof window !== 'undefined') {
+            const savedAuth = localStorage.getItem('boxkhel_auth');
+            if (savedAuth !== 'true') {
+              setIsAuthenticated(false);
+            }
+          }
         }
       } catch (err) {
         console.error('Session check failed:', err);
+      } finally {
+        setIsInitializing(false);
       }
     }
     checkSession();
@@ -163,13 +213,85 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       await fetch('/api/auth/logout', { method: 'POST' });
     } catch (e) {}
     setIsAuthenticated(false);
-    setCurrentUser(MOCK_USERS[0]);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('boxkhel_auth', 'false');
+      localStorage.removeItem('boxkhel_user');
+    }
+  };
+
+  // Global Localities Catalog for Surat
+  const DEFAULT_SURAT_LOCALITIES = [
+    'Mota Varachha',
+    'Adajan',
+    'Vesu',
+    'Katargam',
+    'Pal',
+    'Palanpur',
+    'Althan',
+    'Jahangirpura',
+    'Dumas Road',
+    'Rander',
+    'Varachha',
+    'Udhna',
+    'Ghod Dod Road',
+    'Piplod',
+    'Bhatar',
+    'Sarthana',
+    'Amroli',
+    'Kamrej'
+  ];
+
+  const [localities, setLocalities] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('boxkhel_localities');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        } catch (e) {}
+      }
+    }
+    return DEFAULT_SURAT_LOCALITIES;
+  });
+
+  const addLocality = (rawName: string): { name: string; alreadyExisted: boolean } => {
+    const trimmed = rawName.trim();
+    if (!trimmed) return { name: '', alreadyExisted: false };
+
+    // Standardize title-casing e.g. "mota varachha" -> "Mota Varachha"
+    const formatted = trimmed
+      .split(/\s+/)
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
+
+    // Strict Case-insensitive duplicate check!
+    const existing = localities.find(loc => loc.toLowerCase() === formatted.toLowerCase());
+    if (existing) {
+      return { name: existing, alreadyExisted: true };
+    }
+
+    const updated = [...localities, formatted];
+    setLocalities(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('boxkhel_localities', JSON.stringify(updated));
+    }
+    return { name: formatted, alreadyExisted: false };
   };
 
   const [grounds, setGrounds] = useState<Ground[]>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('boxkhel_grounds');
-      if (saved) try { return JSON.parse(saved); } catch (e) {}
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed.map((g: Ground) => ({
+              ...g,
+              amenities: Array.from(new Set((g.amenities || []).map(normalizeAmenity).filter(Boolean)))
+            }));
+          }
+        } catch (e) {}
+      }
     }
     return MOCK_GROUNDS;
   });
@@ -325,8 +447,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       localStorage.setItem('boxkhel_reviews', JSON.stringify(reviews));
       localStorage.setItem('boxkhel_ledger', JSON.stringify(ledger));
       localStorage.setItem('boxkhel_audit', JSON.stringify(auditLogs));
+      localStorage.setItem('boxkhel_localities', JSON.stringify(localities));
     }
-  }, [grounds, bookings, offlineBlocks, availabilityPosts, teamPosts, joinRequests, teams, challenges, reviews, ledger, auditLogs]);
+  }, [grounds, bookings, offlineBlocks, availabilityPosts, teamPosts, joinRequests, teams, challenges, reviews, ledger, auditLogs, localities]);
 
   const switchRole = (role: UserRole) => {
     const found = MOCK_USERS.find(u => u.role === role);
@@ -369,7 +492,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const updateGround = (id: string, updates: Partial<Ground>) => {
-    setGrounds(prev => prev.map(g => g.id === id ? { ...g, ...updates } : g));
+    setGrounds(prev => {
+      const sanitizedUpdates = { ...updates };
+      if (sanitizedUpdates.amenities) {
+        sanitizedUpdates.amenities = Array.from(
+          new Set(sanitizedUpdates.amenities.map(normalizeAmenity).filter(Boolean))
+        );
+      }
+      return prev.map(g => g.id === id ? { ...g, ...sanitizedUpdates } : g);
+    });
     addAuditLog('GROUND_UPDATED', 'GROUND', id, `Ground settings updated`);
   };
 
@@ -697,15 +828,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     <AppContext.Provider
       value={{
         currentUser,
-        setCurrentUser,
+        setCurrentUser: updateCurrentUser,
         switchRole,
         isAuthenticated,
+        setIsAuthenticated,
+        isInitializing,
         isAuthModalOpen,
         setIsAuthModalOpen,
         logout,
         language,
         setLanguage,
         t: translations[language],
+        localities,
+        addLocality,
         grounds,
         addGround,
         updateGround,
@@ -743,10 +878,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }}
     >
       {children}
-      <AuthModal
-        isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
-      />
     </AppContext.Provider>
   );
 };
