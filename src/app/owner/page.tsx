@@ -38,10 +38,12 @@ import {
   X,
   Upload,
   Copy,
-  QrCode
+  QrCode,
+  Map
 } from 'lucide-react';
 import { TurfType, Ground, Box, RefundTier } from '@/types';
 import { AMENITY_OPTIONS, normalizeAmenity } from '@/lib/mockData';
+import { MapLocationPicker, AddressData } from '@/components/MapLocationPicker';
 
 // Preset Surat Turf Photos for 1-click addition
 const SAMPLE_PHOTOS = [
@@ -253,6 +255,13 @@ export default function OwnerGroundRegistrationPage() {
   const [closeTime, setCloseTime] = useState('02:00');
   const [allDaysOpen, setAllDaysOpen] = useState(true);
 
+  // Location (Lat/Lng) — populated via MapLocationPicker
+  const [groundLat, setGroundLat] = useState<number>(21.1702); // Surat default
+  const [groundLng, setGroundLng] = useState<number>(72.8311);
+  const [locationAddress, setLocationAddress] = useState<string>('');
+  const [locationPinned, setLocationPinned] = useState<boolean>(false);
+  const [isMapPickerOpen, setIsMapPickerOpen] = useState(false);
+
   // Step 2: Pitches & Hourly Rates (Multiple Pitches supported)
   const [pitches, setPitches] = useState<PitchFormState[]>([
     {
@@ -367,6 +376,14 @@ export default function OwnerGroundRegistrationPage() {
       Array.from(new Set((g.amenities || []).map(normalizeAmenity).filter(Boolean)))
     );
     setGalleryImages(g.images && g.images.length > 0 ? g.images : galleryImages);
+
+    // Populate lat/lng from stored ground
+    if (g.lat && g.lng && g.lat !== 0 && g.lng !== 0) {
+      setGroundLat(g.lat);
+      setGroundLng(g.lng);
+      setLocationPinned(true);
+      setLocationAddress(g.addressLine || '');
+    }
 
     if (g.boxes && g.boxes.length > 0) {
       setPitches(
@@ -704,6 +721,8 @@ export default function OwnerGroundRegistrationPage() {
       city,
       state: 'Gujarat',
       pincode,
+      lat: groundLat,
+      lng: groundLng,
       amenities: Array.from(new Set(selectedAmenities.map(normalizeAmenity).filter(Boolean))),
       images: galleryImages,
       boxes: formattedBoxes,
@@ -735,8 +754,8 @@ export default function OwnerGroundRegistrationPage() {
         city,
         state: 'Gujarat',
         pincode,
-        lat: 21.245,
-        lng: 72.889,
+        lat: groundLat,
+        lng: groundLng,
         amenities: Array.from(new Set(selectedAmenities.map(normalizeAmenity).filter(Boolean))),
         status: 'VERIFIED',
         images: galleryImages,
@@ -1226,239 +1245,361 @@ export default function OwnerGroundRegistrationPage() {
               />
             </div>
 
-            {/* Surat Area / Locality Dropdown with Global Catalog */}
-            <div className="space-y-1.5" ref={localityDropdownRef}>
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-slate-900">
-                  Surat Area / Locality * <span className="text-[10px] font-normal text-slate-400">વિસ્તાર</span>
-                </label>
-                <span className="text-[10px] text-slate-400">Global Catalog</span>
+            {/* ══════════════════════════════════════════════════════════════════
+                GROUND LOCATION & ADDRESS (Map-First Auto-Fill + Manual Edit)
+            ══════════════════════════════════════════════════════════════════ */}
+            <div className="rounded-3xl border border-slate-200 bg-white p-4 sm:p-5 shadow-sm space-y-4">
+              
+              {/* Section Header */}
+              <div className="flex items-start justify-between">
+                <div className="flex items-center space-x-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center flex-shrink-0">
+                    <MapPin className="w-4 h-4 text-emerald-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs sm:text-sm font-black text-slate-900 flex items-center gap-1.5">
+                      Ground Location & Address <span className="text-[10px] font-normal text-slate-400">સ્થાન અને સરનામું</span>
+                    </h3>
+                    <p className="text-[10px] sm:text-[11px] text-slate-500 font-medium mt-0.5">
+                      Map se pin karein (auto-fill) ya manually niche address enter karein
+                    </p>
+                  </div>
+                </div>
+                {locationPinned && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-emerald-800 bg-emerald-100/90 px-2.5 py-1 rounded-full border border-emerald-200 flex-shrink-0 shadow-sm">
+                    <Check className="w-3 h-3 text-emerald-700 stroke-[3]" /> Map Pinned
+                  </span>
+                )}
               </div>
 
-              {/* Feedback Alert if added or already existed */}
-              {localityFeedback && (
-                <div className={`p-2.5 rounded-xl text-xs font-bold flex items-center justify-between animate-in fade-in duration-150 ${
-                  localityFeedback.type === 'success' 
-                    ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
-                    : 'bg-blue-50 border border-blue-200 text-blue-800'
-                }`}>
-                  <div className="flex items-center space-x-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
-                    <span>{localityFeedback.message}</span>
-                  </div>
-                  <button onClick={() => setLocalityFeedback(null)} className="text-slate-400 hover:text-slate-600">✕</button>
-                </div>
-              )}
-
-              {/* Main Dropdown Trigger */}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setIsLocalityDropdownOpen(!isLocalityDropdownOpen)}
-                  className={`w-full p-3 rounded-2xl border text-left flex items-center justify-between transition-all cursor-pointer ${
-                    isLocalityDropdownOpen
-                      ? 'border-emerald-600 ring-2 ring-emerald-500/15 bg-white shadow-md'
-                      : 'border-slate-200 bg-white hover:border-slate-300 shadow-sm'
-                  }`}
-                >
-                  <div className="flex items-center space-x-2.5 truncate">
-                    <div className="w-7 h-7 rounded-xl bg-emerald-50 text-emerald-800 flex items-center justify-center text-xs flex-shrink-0">
-                      <MapPin className="w-3.5 h-3.5 text-emerald-600" />
-                    </div>
-                    <div className="truncate">
-                      {area ? (
-                        <div className="text-xs font-bold text-slate-900 flex items-center space-x-1.5 truncate">
-                          <span>{area}, Surat</span>
-                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 font-bold">
-                            Selected
-                          </span>
+              {/* 1. PRIMARY HERO ACTION: Map Location Selection */}
+              <div className={`rounded-2xl border-2 transition-all overflow-hidden ${
+                locationPinned 
+                  ? 'border-emerald-300 bg-gradient-to-br from-emerald-50/70 via-white to-emerald-50/30 shadow-sm' 
+                  : 'border-dashed border-emerald-400/80 bg-gradient-to-br from-emerald-50/40 via-white to-orange-50/20 hover:border-emerald-500 hover:shadow-md'
+              }`}>
+                {locationPinned ? (
+                  /* State A: Location is Pinned */
+                  <div className="p-3.5 sm:p-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-start space-x-3 min-w-0">
+                        <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center flex-shrink-0 shadow-md shadow-emerald-600/20">
+                          <MapPin className="w-5 h-5" />
                         </div>
-                      ) : (
-                        <span className="text-xs font-medium text-slate-400">
-                          Select or search Surat locality...
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center space-x-1.5 flex-shrink-0">
-                    {area && <Check className="w-4 h-4 text-emerald-600 stroke-[2.5]" />}
-                    <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${isLocalityDropdownOpen ? 'transform rotate-180 text-emerald-600' : ''}`} />
-                  </div>
-                </button>
-
-                {/* Floating Searchable Dropdown Menu */}
-                {isLocalityDropdownOpen && (
-                  <div className="absolute top-full left-0 right-0 mt-1.5 bg-white rounded-2xl border border-slate-200 shadow-2xl z-40 overflow-hidden animate-in fade-in duration-150">
-                    
-                    {/* Search Bar inside Dropdown */}
-                    <div className="p-2 border-b border-slate-100 bg-slate-50/70">
-                      <div className="flex items-center rounded-xl border border-slate-200 bg-white px-2.5 py-2 focus-within:border-emerald-600 focus-within:ring-1 focus-within:ring-emerald-500/20">
-                        <Search className="w-3.5 h-3.5 text-slate-400 mr-2 flex-shrink-0" />
-                        <input
-                          type="text"
-                          autoFocus
-                          value={localitySearch}
-                          onChange={(e) => setLocalitySearch(e.target.value)}
-                          placeholder="Search Surat locality (e.g. Sarthana, Vesu, Punagam)..."
-                          className="w-full bg-transparent text-xs font-bold text-slate-900 placeholder:text-slate-400 placeholder:font-normal focus:outline-none"
-                        />
-                        {localitySearch && (
-                          <button
-                            type="button"
-                            onClick={() => setLocalitySearch('')}
-                            className="text-slate-400 hover:text-slate-600 text-xs px-1"
-                          >
-                            ✕
-                          </button>
-                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-xs font-black text-slate-900">
+                              {area ? `${area}, Surat` : 'Surat, Gujarat'}
+                            </span>
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200">
+                              ✓ Auto-Filled
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-600 font-medium mt-0.5 line-clamp-2">
+                            {addressLine || locationAddress || 'Exact ground location coordinates pinned'}
+                          </p>
+                          <div className="flex items-center gap-3 mt-1.5 text-[10px] text-slate-500 font-mono">
+                            <span>📍 GPS: {groundLat.toFixed(5)}, {groundLng.toFixed(5)}</span>
+                            {pincode && <span className="text-emerald-700 font-bold">PIN: {pincode}</span>}
+                          </div>
+                        </div>
                       </div>
-                    </div>
 
-                    {/* Dynamic Add to Catalog Option when search query is not in list */}
-                    {localitySearch.trim() && !localities.some(l => l.toLowerCase() === localitySearch.trim().toLowerCase()) && (
                       <button
                         type="button"
-                        onClick={() => handleAddNewLocality(localitySearch.trim())}
-                        className="w-full p-2.5 bg-orange-50 hover:bg-orange-100 text-left text-xs font-bold text-[#ff6813] flex items-center justify-between border-b border-orange-100 transition-colors cursor-pointer"
+                        onClick={() => setIsMapPickerOpen(true)}
+                        className="w-full sm:w-auto px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold rounded-xl flex items-center justify-center space-x-1.5 transition-all shadow-sm flex-shrink-0 cursor-pointer"
                       >
-                        <div className="flex items-center space-x-2">
-                          <Plus className="w-3.5 h-3.5 text-[#ff6813]" />
-                          <span>Add "<strong className="text-slate-900">{localitySearch.trim()}</strong>" to Global Catalog</span>
-                        </div>
-                        <span className="text-[9px] px-2 py-0.5 rounded bg-orange-200 text-orange-900 font-bold uppercase tracking-wider">
-                          New Area
-                        </span>
+                        <Map className="w-3.5 h-3.5" />
+                        <span>Change Pin on Map</span>
                       </button>
-                    )}
-
-                    {/* Scrollable Localities List */}
-                    <div className="max-h-56 overflow-y-auto divide-y divide-slate-50">
-                      {filteredLocalities.map((loc) => {
-                        const isSelected = area.toLowerCase() === loc.toLowerCase();
-                        return (
-                          <button
-                            key={loc}
-                            type="button"
-                            onClick={() => {
-                              setArea(loc);
-                              setIsLocalityDropdownOpen(false);
-                              setLocalitySearch('');
-                              if (step1Error) setStep1Error(null);
-                            }}
-                            className={`w-full px-3.5 py-2.5 text-left text-xs flex items-center justify-between transition-colors cursor-pointer ${
-                              isSelected 
-                                ? 'bg-emerald-50/80 text-emerald-900 font-bold' 
-                                : 'hover:bg-slate-50 text-slate-700'
-                            }`}
-                          >
-                            <div className="flex items-center space-x-2">
-                              <MapPin className={`w-3.5 h-3.5 ${isSelected ? 'text-emerald-600' : 'text-slate-400'}`} />
-                              <span>{loc}</span>
-                            </div>
-                            {isSelected && <Check className="w-4 h-4 text-emerald-600 stroke-[2.5]" />}
-                          </button>
-                        );
-                      })}
-
-                      {filteredLocalities.length === 0 && (
-                        <div className="p-4 text-center text-xs text-slate-400">
-                          No existing locality found for "{localitySearch}".
-                        </div>
-                      )}
                     </div>
-
-                    {/* Bottom "+ Add New Locality" Quick Action */}
-                    <div className="p-2 border-t border-slate-100 bg-slate-50/80">
-                      {!isAddingNewLocality ? (
-                        <button
-                          type="button"
-                          onClick={() => setIsAddingNewLocality(true)}
-                          className="w-full py-2 px-3 rounded-xl border border-dashed border-emerald-600 bg-white hover:bg-emerald-50 text-[#065f46] text-xs font-bold flex items-center justify-center space-x-1.5 transition-colors cursor-pointer"
-                        >
-                          <Plus className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>Add New Locality</span>
-                        </button>
-                      ) : (
-                        <div className="flex items-center space-x-1.5 p-1 bg-white rounded-xl border border-emerald-300 shadow-sm animate-in fade-in">
-                          <input
-                            type="text"
-                            autoFocus
-                            value={customLocalityInput}
-                            onChange={(e) => setCustomLocalityInput(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                handleAddNewLocality(customLocalityInput);
-                              }
-                            }}
-                            placeholder="Type new locality name..."
-                            className="flex-1 bg-transparent px-2 text-xs font-bold text-slate-900 focus:outline-none"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => handleAddNewLocality(customLocalityInput)}
-                            className="px-2.5 py-1 bg-emerald-700 text-white rounded-lg text-xs font-bold hover:bg-emerald-800 transition-colors shadow-sm"
-                          >
-                            Add
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => { setIsAddingNewLocality(false); setCustomLocalityInput(''); }}
-                            className="px-2 py-1 text-slate-400 hover:text-slate-600 text-xs"
-                          >
-                            ✕
-                          </button>
+                  </div>
+                ) : (
+                  /* State B: Not Pinned Yet (Clear CTA with Auto-fill info) */
+                  <div className="p-3.5 sm:p-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5">
+                      <div className="flex items-start space-x-3">
+                        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-600 text-white flex items-center justify-center flex-shrink-0 shadow-md shadow-emerald-600/20">
+                          <Map className="w-5 h-5" />
                         </div>
-                      )}
-                    </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-extrabold text-slate-900">
+                              Map par Location Select Karein
+                            </span>
+                            <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-[#ff6813]/10 text-[#ff6813] border border-[#ff6813]/20">
+                              ⭐ Recommended
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 mt-0.5 font-medium leading-relaxed">
+                            Map par 1-tap se <strong className="text-slate-700">Address, Locality, Pincode & GPS</strong> apne aap auto-fill ho jayenge.
+                          </p>
+                        </div>
+                      </div>
 
+                      <button
+                        type="button"
+                        onClick={() => setIsMapPickerOpen(true)}
+                        className="w-full sm:w-auto px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-95 text-white text-xs font-black rounded-xl flex items-center justify-center space-x-2 transition-all shadow-md shadow-emerald-600/20 flex-shrink-0 cursor-pointer"
+                      >
+                        <MapPin className="w-4 h-4" />
+                        <span>Choose on Map</span>
+                        <ChevronRight className="w-3.5 h-3.5 ml-0.5" />
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
-            </div>
 
-            {/* Full Street Address (Textarea as requested) */}
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-xs font-bold text-slate-900">
-                  Full Street Address & Landmark * <span className="text-[10px] font-normal text-slate-400">પૂરું સરનામું</span>
-                </label>
-                <span className="text-[10px] text-slate-400">For player navigation & GPS</span>
+              {/* Informational Divider / Manual Edit Notice */}
+              <div className="relative flex items-center py-0.5">
+                <div className="flex-grow border-t border-slate-200"></div>
+                <span className="flex-shrink mx-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-50 px-2.5 py-0.5 rounded-full border border-slate-200">
+                  {locationPinned ? 'Address Fields (Auto-filled / Editable)' : 'Address Fields (Manual Entry)'}
+                </span>
+                <div className="flex-grow border-t border-slate-200"></div>
               </div>
-              <textarea
-                rows={2}
-                value={addressLine}
-                onChange={(e) => setAddressLine(e.target.value)}
-                placeholder="e.g. Near Sudama Chowk, Behind Shell Petrol Pump, Opposite Laxmi Residency..."
-                className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs font-medium text-slate-900 focus:outline-none focus:border-emerald-600 focus:bg-white transition-all resize-y min-h-[60px]"
-              />
-            </div>
 
-            {/* City & Pincode */}
-            <div className="grid grid-cols-3 gap-2">
-              <div className="col-span-2">
-                <label className="block text-xs font-bold text-slate-900 mb-1">
-                  City <span className="text-[10px] font-normal text-slate-400">શહેર</span>
-                </label>
-                <div className="rounded-2xl border border-slate-200 bg-slate-100 px-3.5 py-2.5 text-xs font-bold text-slate-700 flex items-center justify-between">
-                  <span>Surat, Gujarat</span>
-                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">Fixed</span>
+              {/* 2. STRUCTURED ADDRESS FIELDS (Auto-filled or manual) */}
+              <div className="space-y-3.5">
+                
+                {/* Surat Area / Locality Dropdown with Global Catalog */}
+                <div className="space-y-1.5" ref={localityDropdownRef}>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-900">
+                      Surat Area / Locality * <span className="text-[10px] font-normal text-slate-400">વિસ્તાર</span>
+                    </label>
+                    <span className="text-[10px] text-slate-400 font-medium">Global Catalog</span>
+                  </div>
+
+                  {/* Feedback Alert if added or already existed */}
+                  {localityFeedback && (
+                    <div className={`p-2.5 rounded-xl text-xs font-bold flex items-center justify-between animate-in fade-in duration-150 ${
+                      localityFeedback.type === 'success' 
+                        ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+                        : 'bg-blue-50 border border-blue-200 text-blue-800'
+                    }`}>
+                      <div className="flex items-center space-x-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                        <span>{localityFeedback.message}</span>
+                      </div>
+                      <button onClick={() => setLocalityFeedback(null)} className="text-slate-400 hover:text-slate-600">✕</button>
+                    </div>
+                  )}
+
+                  {/* Main Dropdown Trigger */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setIsLocalityDropdownOpen(!isLocalityDropdownOpen)}
+                      className={`w-full p-3 rounded-2xl border text-left flex items-center justify-between transition-all cursor-pointer ${
+                        isLocalityDropdownOpen
+                          ? 'border-emerald-600 ring-2 ring-emerald-500/15 bg-white shadow-md'
+                          : 'border-slate-200 bg-slate-50/50 hover:bg-white hover:border-slate-300 shadow-sm'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-2.5 truncate">
+                        <div className="w-7 h-7 rounded-xl bg-emerald-50 text-emerald-800 flex items-center justify-center text-xs flex-shrink-0">
+                          <MapPin className="w-3.5 h-3.5 text-emerald-600" />
+                        </div>
+                        <div className="truncate">
+                          {area ? (
+                            <div className="text-xs font-bold text-slate-900 flex items-center space-x-1.5 truncate">
+                              <span>{area}, Surat</span>
+                              <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 font-bold">
+                                Selected
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-xs font-medium text-slate-400">
+                              Select or search Surat locality...
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center space-x-1.5 flex-shrink-0">
+                        {area && <Check className="w-4 h-4 text-emerald-600 stroke-[2.5]" />}
+                        <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${isLocalityDropdownOpen ? 'transform rotate-180 text-emerald-600' : ''}`} />
+                      </div>
+                    </button>
+
+                    {/* Floating Searchable Dropdown Menu */}
+                    {isLocalityDropdownOpen && (
+                      <div className="absolute top-full left-0 right-0 mt-1.5 bg-white rounded-2xl border border-slate-200 shadow-2xl z-40 overflow-hidden animate-in fade-in duration-150">
+                        
+                        {/* Search Bar inside Dropdown */}
+                        <div className="p-2 border-b border-slate-100 bg-slate-50/70">
+                          <div className="flex items-center rounded-xl border border-slate-200 bg-white px-2.5 py-2 focus-within:border-emerald-600 focus-within:ring-1 focus-within:ring-emerald-500/20">
+                            <Search className="w-3.5 h-3.5 text-slate-400 mr-2 flex-shrink-0" />
+                            <input
+                              type="text"
+                              autoFocus
+                              value={localitySearch}
+                              onChange={(e) => setLocalitySearch(e.target.value)}
+                              placeholder="Search Surat locality (e.g. Sarthana, Vesu, Punagam)..."
+                              className="w-full bg-transparent text-xs font-bold text-slate-900 placeholder:text-slate-400 placeholder:font-normal focus:outline-none"
+                            />
+                            {localitySearch && (
+                              <button
+                                type="button"
+                                onClick={() => setLocalitySearch('')}
+                                className="text-slate-400 hover:text-slate-600 text-xs px-1"
+                              >
+                                ✕
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Dynamic Add to Catalog Option when search query is not in list */}
+                        {localitySearch.trim() && !localities.some(l => l.toLowerCase() === localitySearch.trim().toLowerCase()) && (
+                          <button
+                            type="button"
+                            onClick={() => handleAddNewLocality(localitySearch.trim())}
+                            className="w-full p-2.5 bg-orange-50 hover:bg-orange-100 text-left text-xs font-bold text-[#ff6813] flex items-center justify-between border-b border-orange-100 transition-colors cursor-pointer"
+                          >
+                            <div className="flex items-center space-x-2">
+                              <Plus className="w-3.5 h-3.5 text-[#ff6813]" />
+                              <span>Add "<strong className="text-slate-900">{localitySearch.trim()}</strong>" to Global Catalog</span>
+                            </div>
+                            <span className="text-[9px] px-2 py-0.5 rounded bg-orange-200 text-orange-900 font-bold uppercase tracking-wider">
+                              New Area
+                            </span>
+                          </button>
+                        )}
+
+                        {/* Scrollable Localities List */}
+                        <div className="max-h-56 overflow-y-auto divide-y divide-slate-50">
+                          {filteredLocalities.map((loc) => {
+                            const isSelected = area.toLowerCase() === loc.toLowerCase();
+                            return (
+                              <button
+                                key={loc}
+                                type="button"
+                                onClick={() => {
+                                  setArea(loc);
+                                  setIsLocalityDropdownOpen(false);
+                                  setLocalitySearch('');
+                                  if (step1Error) setStep1Error(null);
+                                }}
+                                className={`w-full px-3.5 py-2.5 text-left text-xs flex items-center justify-between transition-colors cursor-pointer ${
+                                  isSelected 
+                                    ? 'bg-emerald-50/80 text-emerald-900 font-bold' 
+                                    : 'hover:bg-slate-50 text-slate-700'
+                                }`}
+                              >
+                                <div className="flex items-center space-x-2">
+                                  <MapPin className={`w-3.5 h-3.5 ${isSelected ? 'text-emerald-600' : 'text-slate-400'}`} />
+                                  <span>{loc}</span>
+                                </div>
+                                {isSelected && <Check className="w-4 h-4 text-emerald-600 stroke-[2.5]" />}
+                              </button>
+                            );
+                          })}
+
+                          {filteredLocalities.length === 0 && (
+                            <div className="p-4 text-center text-xs text-slate-400">
+                              No existing locality found for "{localitySearch}".
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Bottom "+ Add New Locality" Quick Action */}
+                        <div className="p-2 border-t border-slate-100 bg-slate-50/80">
+                          {!isAddingNewLocality ? (
+                            <button
+                              type="button"
+                              onClick={() => setIsAddingNewLocality(true)}
+                              className="w-full py-2 px-3 rounded-xl border border-dashed border-emerald-600 bg-white hover:bg-emerald-50 text-[#065f46] text-xs font-bold flex items-center justify-center space-x-1.5 transition-colors cursor-pointer"
+                            >
+                              <Plus className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>Add New Locality</span>
+                            </button>
+                          ) : (
+                            <div className="flex items-center space-x-1.5 p-1 bg-white rounded-xl border border-emerald-300 shadow-sm animate-in fade-in">
+                              <input
+                                type="text"
+                                autoFocus
+                                value={customLocalityInput}
+                                onChange={(e) => setCustomLocalityInput(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleAddNewLocality(customLocalityInput);
+                                  }
+                                }}
+                                placeholder="Type new locality name..."
+                                className="flex-1 bg-transparent px-2 text-xs font-bold text-slate-900 focus:outline-none"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleAddNewLocality(customLocalityInput)}
+                                className="px-2.5 py-1 bg-emerald-700 text-white rounded-lg text-xs font-bold hover:bg-emerald-800 transition-colors shadow-sm"
+                              >
+                                Add
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => { setIsAddingNewLocality(false); setCustomLocalityInput(''); }}
+                                className="px-2 py-1 text-slate-400 hover:text-slate-600 text-xs"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Full Street Address (Textarea) */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-bold text-slate-900">
+                      Full Street Address & Landmark * <span className="text-[10px] font-normal text-slate-400">પૂરું સરનામું</span>
+                    </label>
+                    <span className="text-[10px] text-slate-400 font-medium">For player navigation & GPS</span>
+                  </div>
+                  <textarea
+                    rows={2}
+                    value={addressLine}
+                    onChange={(e) => setAddressLine(e.target.value)}
+                    placeholder="e.g. Near Sudama Chowk, Behind Shell Petrol Pump, Opposite Laxmi Residency..."
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50/50 p-3 text-xs font-medium text-slate-900 focus:outline-none focus:border-emerald-600 focus:bg-white transition-all resize-y min-h-[60px]"
+                  />
+                </div>
+
+                {/* City & Pincode */}
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="col-span-2">
+                    <label className="block text-xs font-bold text-slate-900 mb-1">
+                      City <span className="text-[10px] font-normal text-slate-400">શહેર</span>
+                    </label>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-100/80 px-3.5 py-2.5 text-xs font-bold text-slate-700 flex items-center justify-between">
+                      <span>Surat, Gujarat</span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">Fixed</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-900 mb-1">
+                      Pincode <span className="text-[10px] font-normal text-slate-400">પિનકોડ</span>
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={6}
+                      value={pincode}
+                      onChange={(e) => setPincode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="394101"
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-xs font-bold text-slate-900 focus:outline-none focus:border-emerald-600 focus:bg-white transition-all tracking-wider"
+                    />
+                  </div>
                 </div>
               </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-900 mb-1">
-                  Pincode <span className="text-[10px] font-normal text-slate-400">પિનકોડ</span>
-                </label>
-                <input
-                  type="text"
-                  maxLength={6}
-                  value={pincode}
-                  onChange={(e) => setPincode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  placeholder="394101"
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs font-bold text-slate-900 focus:outline-none focus:border-emerald-600 focus:bg-white transition-all tracking-wider"
-                />
-              </div>
+
             </div>
 
             {/* Operating Hours */}
@@ -3359,6 +3500,57 @@ export default function OwnerGroundRegistrationPage() {
           <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0" />
           <span>{deleteWarningToast}</span>
         </div>
+      )}
+
+      {/* ── MAP LOCATION PICKER MODAL ── */}
+      {isMapPickerOpen && (
+        <MapLocationPicker
+          initialLat={groundLat}
+          initialLng={groundLng}
+          onLocationSelect={(lat, lng, data: AddressData) => {
+            setGroundLat(lat);
+            setGroundLng(lng);
+            setLocationAddress(data.fullAddress);
+            setLocationPinned(true);
+
+            // ─ Auto-fill Street Address ─
+            if (data.addressLine) {
+              setAddressLine(data.addressLine);
+            }
+
+            // ─ Auto-fill Pincode ─
+            if (data.pincode && data.pincode.length >= 5) {
+              setPincode(data.pincode);
+            }
+
+            // ─ Auto-fill Area / Locality ─
+            // Try exact match first, then partial match, then add to catalog
+            if (data.area) {
+              const normalizedArea = data.area.trim();
+              const exactMatch = localities.find(
+                (l) => l.toLowerCase() === normalizedArea.toLowerCase()
+              );
+              if (exactMatch) {
+                setArea(exactMatch);
+              } else {
+                // Partial match e.g. "Mota Varachha" in "Varachha"
+                const partialMatch = localities.find(
+                  (l) =>
+                    l.toLowerCase().includes(normalizedArea.toLowerCase()) ||
+                    normalizedArea.toLowerCase().includes(l.toLowerCase())
+                );
+                if (partialMatch) {
+                  setArea(partialMatch);
+                } else {
+                  // Add new area to global catalog
+                  const result = addLocality(normalizedArea);
+                  setArea(result.name);
+                }
+              }
+            }
+          }}
+          onClose={() => setIsMapPickerOpen(false)}
+        />
       )}
 
     </div>

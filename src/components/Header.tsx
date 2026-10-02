@@ -168,12 +168,6 @@ export const Header: React.FC = () => {
               );
             })}
           </div>
-
-          {/* Active Tonight Indicator */}
-          <div className="flex items-center space-x-1.5 text-[11px] font-bold text-[#065f46] bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>14 Turfs Active Tonight</span>
-          </div>
         </div>
       )}
 

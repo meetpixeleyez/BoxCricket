@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { SlotPickerModal } from '@/components/SlotPickerModal';
 import { BookingCheckoutModal } from '@/components/BookingCheckoutModal';
+import { GroundMiniMap } from '@/components/GroundMiniMap';
 import { Box } from '@/types';
 import { normalizeAmenity } from '@/lib/mockData';
 
@@ -291,7 +292,11 @@ export default function GroundDetailPage() {
         {/* 3. Action Buttons */}
         <div className="grid grid-cols-2 gap-3">
           <a
-            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(ground.name + ' ' + ground.area + ' Surat')}`}
+            href={
+              ground.lat && ground.lng && !(ground.lat === 21.1702 && ground.lng === 72.8311)
+                ? `https://www.google.com/maps?q=${ground.lat},${ground.lng}&z=17`
+                : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(ground.name + ' ' + ground.area + ' Surat')}`
+            }
             target="_blank"
             rel="noreferrer"
             className="py-3 rounded-2xl bg-white border border-slate-200 text-slate-800 font-bold text-xs flex items-center justify-center space-x-2 hover:bg-slate-50 transition-colors shadow-sm"
@@ -488,22 +493,25 @@ export default function GroundDetailPage() {
 
         {/* 7. Location & Traffic Map */}
         <div>
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-black text-slate-900">Location</h3>
-            <span className="text-xs text-slate-500">{ground.addressLine}, {ground.area}</span>
+          <div className="flex items-center justify-between mb-2.5">
+            <div>
+              <h3 className="text-sm font-black text-slate-900">Ground Location</h3>
+              <p className="text-[11px] text-slate-500 font-medium">{ground.addressLine}, {ground.area}</p>
+            </div>
+            <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+              Live Pin
+            </span>
           </div>
 
-          <div className="h-32 rounded-2xl bg-blue-50/70 border border-blue-100 flex flex-col items-center justify-center p-4 text-center relative overflow-hidden">
-            <a
-              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(ground.name + ' ' + ground.area + ' Surat')}`}
-              target="_blank"
-              rel="noreferrer"
-              className="px-4 py-2 rounded-xl bg-white border border-slate-200 text-emerald-800 font-bold text-xs flex items-center space-x-2 shadow-sm hover:bg-slate-50 transition-all"
-            >
-              <MapPin className="w-4 h-4 text-emerald-600" />
-              <span>Tap to get live traffic directions</span>
-            </a>
-          </div>
+          <GroundMiniMap
+            lat={ground.lat}
+            lng={ground.lng}
+            groundName={ground.name}
+            addressLine={ground.addressLine}
+            area={ground.area}
+            height="h-60"
+          />
         </div>
 
         {/* 8. Cancellation Policy (From Registration Step 5) */}
