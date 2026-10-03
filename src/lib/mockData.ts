@@ -94,8 +94,8 @@ export const MOCK_GROUNDS: Ground[] = [
     ownerId: 'user_owner_1',
     ownerName: 'Ramesh Patel',
     ownerPhone: '9825100001',
-    name: 'Kings Box Cricket Arena',
-    description: 'Surat’s premier ultra-cushioned indoor 360 turf with professional LED floodlights, air-cooled dugout, and live streaming scoreboard.',
+    name: 'Virat Cricket Ground',
+    description: 'Surat’s premier ultra-cushioned arena featuring 360° enclosed turf arenas and spacious open sky boxes with professional LED floodlights.',
     phone: '+91 98251 00001',
     addressLine: 'Near Sudama Chowk, Behind Shell Petrol Pump',
     area: 'Mota Varachha',
@@ -108,7 +108,8 @@ export const MOCK_GROUNDS: Ground[] = [
       'Night Floodlights',
       'Dedicated Car & Bike Parking',
       'Chilled RO Drinking Water',
-      'Bat & Ball Rental Included'
+      'Bat & Ball Rental Included',
+      'Air-Cooled Dugout'
     ],
     status: 'VERIFIED',
     avgRating: 4.8,
@@ -120,9 +121,9 @@ export const MOCK_GROUNDS: Ground[] = [
     ],
     boxes: [
       {
-        id: 'box_1_a',
+        id: 'box_1',
         groundId: 'ground_1',
-        name: 'Box A (360° Turf Arena)',
+        name: 'Box 1',
         type: 'THREE_SIXTY',
         widthFt: 110,
         heightFt: 45,
@@ -144,9 +145,81 @@ export const MOCK_GROUNDS: Ground[] = [
         ]
       },
       {
-        id: 'box_1_b',
+        id: 'box_2',
         groundId: 'ground_1',
-        name: 'Box B (Open Sky Box)',
+        name: 'Box 2',
+        type: 'THREE_SIXTY',
+        widthFt: 110,
+        heightFt: 45,
+        maxPlayers: 14,
+        basePrice: 900,
+        slotMinutes: 60,
+        isActive: true,
+        images: [
+          'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=800&auto=format&fit=crop&q=80'
+        ],
+        schedules: [
+          { dayOfWeek: 1, openTime: '06:00', closeTime: '02:00', pricePerHour: 900 },
+          { dayOfWeek: 2, openTime: '06:00', closeTime: '02:00', pricePerHour: 900 },
+          { dayOfWeek: 3, openTime: '06:00', closeTime: '02:00', pricePerHour: 900 },
+          { dayOfWeek: 4, openTime: '06:00', closeTime: '02:00', pricePerHour: 900 },
+          { dayOfWeek: 5, openTime: '06:00', closeTime: '02:00', pricePerHour: 1000 },
+          { dayOfWeek: 6, openTime: '06:00', closeTime: '02:00', pricePerHour: 1100 },
+          { dayOfWeek: 0, openTime: '06:00', closeTime: '02:00', pricePerHour: 1100 },
+        ]
+      },
+      {
+        id: 'box_3',
+        groundId: 'ground_1',
+        name: 'Box 3',
+        type: 'OPEN',
+        widthFt: 95,
+        heightFt: 40,
+        maxPlayers: 12,
+        basePrice: 750,
+        slotMinutes: 60,
+        isActive: true,
+        images: [
+          'https://images.unsplash.com/photo-1531415074868-036b1c57e329?w=800&auto=format&fit=crop&q=80'
+        ],
+        schedules: [
+          { dayOfWeek: 1, openTime: '06:00', closeTime: '00:00', pricePerHour: 750 },
+          { dayOfWeek: 2, openTime: '06:00', closeTime: '00:00', pricePerHour: 750 },
+          { dayOfWeek: 3, openTime: '06:00', closeTime: '00:00', pricePerHour: 750 },
+          { dayOfWeek: 4, openTime: '06:00', closeTime: '00:00', pricePerHour: 750 },
+          { dayOfWeek: 5, openTime: '06:00', closeTime: '00:00', pricePerHour: 850 },
+          { dayOfWeek: 6, openTime: '06:00', closeTime: '00:00', pricePerHour: 900 },
+          { dayOfWeek: 0, openTime: '06:00', closeTime: '00:00', pricePerHour: 900 },
+        ]
+      },
+      {
+        id: 'box_4',
+        groundId: 'ground_1',
+        name: 'Box 4',
+        type: 'OPEN',
+        widthFt: 95,
+        heightFt: 40,
+        maxPlayers: 12,
+        basePrice: 750,
+        slotMinutes: 60,
+        isActive: true,
+        images: [
+          'https://images.unsplash.com/photo-1531415074868-036b1c57e329?w=800&auto=format&fit=crop&q=80'
+        ],
+        schedules: [
+          { dayOfWeek: 1, openTime: '06:00', closeTime: '00:00', pricePerHour: 750 },
+          { dayOfWeek: 2, openTime: '06:00', closeTime: '00:00', pricePerHour: 750 },
+          { dayOfWeek: 3, openTime: '06:00', closeTime: '00:00', pricePerHour: 750 },
+          { dayOfWeek: 4, openTime: '06:00', closeTime: '00:00', pricePerHour: 750 },
+          { dayOfWeek: 5, openTime: '06:00', closeTime: '00:00', pricePerHour: 850 },
+          { dayOfWeek: 6, openTime: '06:00', closeTime: '00:00', pricePerHour: 900 },
+          { dayOfWeek: 0, openTime: '06:00', closeTime: '00:00', pricePerHour: 900 },
+        ]
+      },
+      {
+        id: 'box_5',
+        groundId: 'ground_1',
+        name: 'Box 5',
         type: 'OPEN',
         widthFt: 95,
         heightFt: 40,
@@ -169,9 +242,9 @@ export const MOCK_GROUNDS: Ground[] = [
       }
     ],
     paymentSettings: {
-      upiId: 'kingsboxcricket@okaxis',
-      upiName: 'Kings Box Cricket LLP',
-      qrImageUrl: 'https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=upi://pay?pa=kingsboxcricket@okaxis&pn=KingsBoxCricket&cu=INR',
+      upiId: 'viratcricket@okaxis',
+      upiName: 'Virat Cricket Ground',
+      qrImageUrl: 'https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=upi://pay?pa=viratcricket@okaxis&pn=ViratCricketGround&cu=INR',
       advanceEnabled: true,
       advanceType: 'PERCENT',
       advanceValue: 30, // 30% advance

@@ -94,14 +94,53 @@ export function GroundMiniMap({
 
       const marker = Leaflet.marker([safeLat, safeLng], { icon: customIcon }).addTo(map);
 
-      // Popup with ground name
-      marker.bindPopup(`
-        <div style="font-family: inherit; padding: 2px 4px; font-size: 12px; font-weight: 800; color: #0f172a; text-align: center;">
-          <div style="color: #059669; font-size: 10px; text-transform: uppercase; font-weight: 900; letter-spacing: 0.5px;">Cricket Box Arena</div>
-          <div>${groundName}</div>
-          <div style="font-size: 10px; color: #64748b; font-weight: 500; margin-top: 2px;">${area}</div>
+      // Tooltip with ground name & address (strictly on hover / tap)
+      const popupHtml = `
+        <div style="font-family: inherit; min-width: 160px; max-width: 240px; padding: 2px 0;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; gap: 8px;">
+            <span style="font-size: 8.5px; font-weight: 800; color: #047857; text-transform: uppercase; letter-spacing: 0.5px; background: #ecfdf5; padding: 1.5px 5px; border-radius: 4px; border: 1px solid #a7f3d0;">
+              Cricket Box
+            </span>
+            <span style="display: inline-flex; align-items: center; gap: 3px; font-size: 8.5px; font-weight: 700; color: #059669;">
+              <span style="width: 5px; height: 5px; border-radius: 50%; background: #10b981; display: inline-block;"></span>
+              Active
+            </span>
+          </div>
+          <div style="font-size: 12px; font-weight: 800; color: #0f172a; line-height: 1.25; letter-spacing: -0.1px;">
+            ${groundName}
+          </div>
+          <div style="font-size: 10px; color: #64748b; font-weight: 500; margin-top: 3px; line-height: 1.3;">
+            📍 ${addressLine || area || 'Surat, Gujarat'}
+          </div>
         </div>
-      `, { offset: [0, -14] });
+      `;
+
+      marker.bindTooltip(popupHtml, {
+        direction: 'top',
+        offset: [0, -28],
+        className: 'custom-ground-popup',
+        opacity: 1,
+        sticky: false,
+        interactive: false,
+      });
+
+      // Explicit hover & mouseout handlers
+      marker.on('mouseover', () => {
+        marker.openTooltip();
+      });
+
+      marker.on('mouseout', () => {
+        marker.closeTooltip();
+      });
+
+      // Native DOM event listener hook for immediate hover detection
+      setTimeout(() => {
+        const el = marker.getElement();
+        if (el) {
+          el.addEventListener('mouseenter', () => marker.openTooltip());
+          el.addEventListener('mouseleave', () => marker.closeTooltip());
+        }
+      }, 50);
 
       mapRef.current = map;
       setMapLoaded(true);
@@ -121,7 +160,7 @@ export function GroundMiniMap({
         delete (container as any)._leaflet_id;
       }
     };
-  }, [safeLat, safeLng, groundName, area]);
+  }, [safeLat, safeLng, groundName, addressLine, area]);
 
   return (
     <div className="relative rounded-3xl overflow-hidden border border-slate-200 shadow-sm group">
@@ -141,38 +180,18 @@ export function GroundMiniMap({
         </div>
       )}
 
-      {/* Top Location Chip Overlay */}
-      <div className="absolute top-3 left-3 right-3 z-20 pointer-events-none flex items-center justify-between">
-        <div className="bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-2xl shadow-md border border-slate-200/80 flex items-center space-x-2 max-w-[75%] truncate pointer-events-auto">
-          <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
-          <span className="text-[11px] font-black text-slate-900 truncate">
-            {groundName}
-          </span>
-          <span className="text-[10px] text-slate-400 font-medium truncate">
-            • {area}
-          </span>
-        </div>
-
-        <div className="bg-white/95 backdrop-blur-md px-2.5 py-1.5 rounded-2xl shadow-md border border-slate-200/80 text-[10px] font-mono text-slate-600 font-bold pointer-events-auto">
-          {safeLat.toFixed(4)}, {safeLng.toFixed(4)}
-        </div>
-      </div>
-
-      {/* Bottom Floating Navigation Action Bar */}
-      <div className="absolute bottom-3 left-3 right-3 z-20 flex items-center justify-between gap-2">
-        <div className="hidden sm:block bg-white/90 backdrop-blur-md px-3 py-2 rounded-xl text-[10px] text-slate-600 font-medium border border-slate-200/70 shadow-md truncate flex-1 mr-2">
-          📍 {addressLine || `${area}, Surat`}
-        </div>
-
+      {/* Compact Floating Directions Button */}
+      <div className="absolute bottom-2.5 right-2.5 z-20">
         <a
           href={googleMapsUrl}
           target="_blank"
           rel="noreferrer"
-          className="w-full sm:w-auto px-4 py-2.5 rounded-2xl bg-emerald-700 hover:bg-emerald-800 active:scale-95 text-white font-extrabold text-xs flex items-center justify-center space-x-2 shadow-lg shadow-emerald-700/30 transition-all border border-emerald-600"
+          className="px-3 py-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-900 active:scale-95 text-white font-bold text-[11px] flex items-center space-x-1.5 shadow-md backdrop-blur-md transition-all border border-slate-700/40"
+          title="Open in Google Maps"
         >
-          <Navigation className="w-4 h-4 text-emerald-200" />
-          <span>Get Live Directions</span>
-          <ExternalLink className="w-3.5 h-3.5 opacity-80" />
+          <Navigation className="w-3 h-3 text-emerald-400" />
+          <span>Directions</span>
+          <ExternalLink className="w-2.5 h-2.5 opacity-70" />
         </a>
       </div>
     </div>

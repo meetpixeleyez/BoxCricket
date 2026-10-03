@@ -22,6 +22,7 @@ import {
   Share2
 } from 'lucide-react';
 import Link from 'next/link';
+import { formatSlotTimeRange, formatDateDisplay } from '@/lib/dateUtils';
 
 export interface BookingCheckoutModalProps {
   isOpen?: boolean;
@@ -50,11 +51,14 @@ export const BookingCheckoutModal: React.FC<BookingCheckoutModalProps> = ({
 }) => {
   const { createBooking, currentUser } = useApp();
 
+  const activeBox = bookingDetails?.box || box;
   const date = bookingDetails?.date || propDate || new Date().toISOString().split('T')[0];
   const startTime = bookingDetails?.slots?.[0]?.startTime || propStartTime || '20:00';
   const endTime = bookingDetails?.slots?.[bookingDetails.slots.length - 1]?.endTime || propEndTime || '22:00';
   const totalAmount = bookingDetails?.totalAmount || propTotalAmount || 1800;
-  const advanceAmount = bookingDetails?.advancePayable || (ground.paymentSettings?.advanceEnabled ? Math.round((totalAmount * 30) / 100) : 0);
+  const advanceAmount = bookingDetails?.advancePayable !== undefined 
+    ? bookingDetails.advancePayable 
+    : (ground.paymentSettings?.advanceEnabled ? Math.round((totalAmount * 30) / 100) : 0);
   const balanceAmount = totalAmount - advanceAmount;
 
   // 15-Minute Hold Timer
@@ -95,9 +99,17 @@ export const BookingCheckoutModal: React.FC<BookingCheckoutModalProps> = ({
   };
 
   const handleConfirmBooking = () => {
-    if (advanceAmount > 0 && !utrInput.trim()) {
-      setErrorMsg('Please enter UPI UTR / Transaction reference ID from your payment app.');
-      return;
+    const cleanedUtr = utrInput.trim().replace(/\D/g, '');
+
+    if (advanceAmount > 0) {
+      if (!cleanedUtr) {
+        setErrorMsg('Please enter 12-digit UPI UTR / Transaction ID from your payment app.');
+        return;
+      }
+      if (cleanedUtr.length !== 12) {
+        setErrorMsg(`UPI UTR / Reference ID must be exactly 12 digits (currently ${cleanedUtr.length} digits).`);
+        return;
+      }
     }
 
     setIsSubmitting(true);
@@ -105,8 +117,8 @@ export const BookingCheckoutModal: React.FC<BookingCheckoutModalProps> = ({
 
     try {
       const newBooking = createBooking({
-        boxId: box.id,
-        boxName: box.name,
+        boxId: activeBox.id,
+        boxName: activeBox.name,
         groundId: ground.id,
         groundName: ground.name,
         groundArea: ground.area,
@@ -119,7 +131,7 @@ export const BookingCheckoutModal: React.FC<BookingCheckoutModalProps> = ({
         advanceAmount,
         balanceAmount,
         paymentStatus: advanceAmount > 0 ? 'ADVANCE_PAID' : 'UNPAID',
-        utr: utrInput.trim() || 'UPI-REF-AUTO',
+        utr: cleanedUtr || 'UPI-REF-AUTO',
         refundPolicySnapshot: ground.paymentSettings?.refundTiers || [
           { hoursBefore: 12, refundPercent: 30 },
           { hoursBefore: 3, refundPercent: 20 },
@@ -139,7 +151,7 @@ export const BookingCheckoutModal: React.FC<BookingCheckoutModalProps> = ({
   const qrUrl = ground.paymentSettings?.qrImageUrl || `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(ground.name)}&am=${advanceAmount}`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm overflow-y-auto animate-in fade-in">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm overflow-y-auto animate-in fade-in">
       <div className="w-full max-w-[440px] rounded-3xl bg-white text-slate-900 shadow-2xl relative overflow-hidden my-auto border border-slate-100 max-h-[92vh] flex flex-col">
         
         {/* Top Header */}
@@ -189,8 +201,8 @@ export const BookingCheckoutModal: React.FC<BookingCheckoutModalProps> = ({
                   <span>{ground.name}</span>
                   <span className="text-emerald-800 font-black">{box.name}</span>
                 </div>
-                <div className="text-slate-500 text-[11px]">
-                  {date} • {startTime} - {endTime}
+                <div className="text-slate-500 text-[11px] font-bold">
+                  {formatDateDisplay(date)} • {formatSlotTimeRange(startTime, endTime)}
                 </div>
                 <div className="pt-2 border-t border-slate-200 flex justify-between">
                   <span className="text-slate-500">Advance Paid:</span>
@@ -280,19 +292,43 @@ export const BookingCheckoutModal: React.FC<BookingCheckoutModalProps> = ({
 
               {/* UTR Input */}
               <div>
-                <label className="block text-xs font-bold text-slate-900 mb-1.5">
-                  Enter 12-Digit UPI Transaction / UTR ID *
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-bold text-slate-900">
+                    Enter 12-Digit UPI Transaction / UTR ID *
+                  </label>
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
+                    utrInput.length === 12
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : utrInput.length > 0
+                      ? 'bg-amber-100 text-amber-800'
+                      : 'text-slate-400'
+                  }`}>
+                    {utrInput.length}/12 digits {utrInput.length === 12 ? '✓' : ''}
+                  </span>
+                </div>
                 <input
                   type="text"
-                  maxLength={16}
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={12}
                   value={utrInput}
-                  onChange={(e) => setUtrInput(e.target.value)}
+                  onChange={(e) => {
+                    const onlyNums = e.target.value.replace(/\D/g, '').slice(0, 12);
+                    setUtrInput(onlyNums);
+                    if (errorMsg) setErrorMsg('');
+                  }}
                   placeholder="e.g. 428190382910"
-                  className="w-full p-3 rounded-2xl bg-slate-50 border border-slate-200 text-sm font-bold text-slate-900 focus:outline-none focus:border-emerald-600"
+                  className={`w-full p-3 rounded-2xl bg-slate-50 border text-sm font-mono tracking-wider font-bold text-slate-900 focus:outline-none transition-all ${
+                    utrInput.length === 12 
+                      ? 'border-emerald-500 ring-2 ring-emerald-500/20 bg-emerald-50/20' 
+                      : 'border-slate-200 focus:border-emerald-600'
+                  }`}
                 />
-                <p className="text-[10px] text-slate-400 mt-1">
-                  You can find this 12-digit reference number in your UPI payment app receipt.
+                <p className="text-[10.5px] text-slate-500 mt-1 flex items-center justify-between">
+                  <span>Found in GPay/PhonePe/Paytm payment receipt.</span>
+                  {utrInput.length > 0 && utrInput.length < 12 && (
+                    <span className="text-amber-700 font-bold">{12 - utrInput.length} more digits needed</span>
+                  )}
                 </p>
               </div>
 

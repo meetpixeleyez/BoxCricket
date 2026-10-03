@@ -155,13 +155,13 @@ export interface AvailabilityPost {
   playerPhone: string;
   playerPhoto?: string;
   role: PlayingRole;
-  skill: SkillLevel;
+  skill?: SkillLevel;
   date: string;
   timeWindow: string; // e.g. "8:00 PM - 11:00 PM"
   centerArea: string;
   lat: number;
   lng: number;
-  radiusKm: number;
+  radiusKm?: number;
   note?: string;
   status: 'ACTIVE' | 'EXPIRED' | 'MATCHED';
   createdAt: string;
@@ -196,6 +196,11 @@ export interface JoinRequest {
   senderRole?: PlayingRole;
   senderSkill?: SkillLevel;
   receiverId: string;
+  targetTitle?: string;
+  targetSubtitle?: string;
+  targetSchedule?: string;
+  targetPhone?: string;
+  targetLocationUrl?: string;
   message?: string;
   rejectMessage?: string;
   status: 'PENDING' | 'ACCEPTED' | 'REJECTED';

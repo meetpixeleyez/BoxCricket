@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
 import { 
@@ -19,12 +19,13 @@ import {
   AlertCircle,
   ExternalLink,
   Info,
+  Zap,
   X
 } from 'lucide-react';
 import { SlotPickerModal } from '@/components/SlotPickerModal';
 import { BookingCheckoutModal } from '@/components/BookingCheckoutModal';
 import { GroundMiniMap } from '@/components/GroundMiniMap';
-import { Box } from '@/types';
+import { Box, TurfType } from '@/types';
 import { normalizeAmenity } from '@/lib/mockData';
 
 // Map registered amenities to visual icons with intelligent fallbacks
@@ -90,6 +91,39 @@ export default function GroundDetailPage() {
   const [isSlotPickerOpen, setIsSlotPickerOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [bookingDetails, setBookingDetails] = useState<any>(null);
+
+  // Group boxes under their Turf Type Tag (e.g. 360° Turf Arena -> Box 1, Box 2 | Open Sky Box -> Box 3, Box 4)
+  const groupedBoxes = useMemo(() => {
+    const groups: Record<string, { type: TurfType; title: string; icon: string; desc: string; boxes: Box[] }> = {};
+
+    ground.boxes.forEach((box) => {
+      const typeKey = box.type || 'THREE_SIXTY';
+      if (!groups[typeKey]) {
+        let title = '360° Net Turf Arena';
+        let icon = '🕸️';
+        let desc = 'Full 360° enclosed heavy-duty netting arena for maximum action';
+        if (typeKey === 'OPEN') {
+          title = 'Open Sky Box';
+          icon = '🌤️';
+          desc = 'Open-to-sky spacious box cricket pitch with natural airflow';
+        } else if (typeKey === 'CLOSED') {
+          title = 'Covered Roof Turf';
+          icon = '🏠';
+          desc = 'All-weather indoor covered roof turf arena with ventilation';
+        }
+        groups[typeKey] = {
+          type: typeKey,
+          title,
+          icon,
+          desc,
+          boxes: [],
+        };
+      }
+      groups[typeKey].boxes.push(box);
+    });
+
+    return Object.values(groups);
+  }, [ground.boxes]);
 
   // Hero Image Carousel State
   const images = (ground?.images && ground.images.length > 0)
@@ -314,85 +348,99 @@ export default function GroundDetailPage() {
           </a>
         </div>
 
-        {/* 4. Pitch & Turf Specs (Real Data from Box Registration) */}
-        <div>
-          <div className="flex items-center justify-between mb-2.5">
+        {/* 4. Available Pitches Grouped by Turf Type */}
+        <div className="space-y-3.5">
+          <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              <h3 className="text-sm font-black text-slate-900">Pitch & Turf Specs</h3>
-              {ground.boxes.length > 1 && (
-                <div className="flex items-center space-x-1">
-                  {ground.boxes.map((b) => (
-                    <button
-                      key={b.id}
-                      type="button"
-                      onClick={() => setSelectedBox(b)}
-                      className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
-                        selectedBox.id === b.id
-                          ? 'bg-emerald-700 text-white shadow-xs'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                      }`}
-                    >
-                      {b.name.split(' ')[0]} {b.name.split(' ')[1] || ''}
-                    </button>
-                  ))}
-                </div>
-              )}
+              <div className="w-1.5 h-4 bg-emerald-600 rounded-full" />
+              <div>
+                <h3 className="text-sm font-black text-slate-900">Available Pitches & Turf Types</h3>
+                <p className="text-[10px] text-slate-400">
+                  {ground.boxes.length} {ground.boxes.length === 1 ? 'Pitch on site' : 'Pitches on site'} across {groupedBoxes.length} {groupedBoxes.length === 1 ? 'Turf Type' : 'Turf Types'}
+                </p>
+              </div>
             </div>
-            <span className="text-[10px] font-black uppercase text-emerald-700 tracking-wider">
-              {selectedBox?.name || ground.boxes[0]?.name}
-            </span>
           </div>
 
-          <div className="grid grid-cols-2 gap-2.5">
-            
-            {/* Pitch Dimensions */}
-            <div className="p-3.5 rounded-2xl bg-white border border-slate-100 shadow-sm space-y-1">
-              <div className="w-7 h-7 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center text-xs mb-1">
-                📐
-              </div>
-              <div className="text-[10px] text-slate-400 font-medium">Pitch Dimensions</div>
-              <div className="text-sm font-black text-slate-900">
-                {selectedBox?.widthFt || 110} × {selectedBox?.heightFt || 45} ft
-              </div>
-            </div>
+          {/* Grouped Turf Types List */}
+          <div className="space-y-4">
+            {groupedBoxes.map((group) => (
+              <div
+                key={group.type}
+                className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm space-y-3"
+              >
+                {/* Turf Type Category Header */}
+                <div className="flex items-start justify-between pb-3 border-b border-slate-100">
+                  <div className="flex items-center space-x-2.5">
+                    <div className="w-9 h-9 rounded-2xl bg-emerald-50 text-emerald-800 text-lg flex items-center justify-center border border-emerald-200/80 shadow-2xs flex-shrink-0">
+                      {group.icon}
+                    </div>
+                    <div>
+                      <div className="flex items-center space-x-2 flex-wrap">
+                        <span className="text-xs font-black text-slate-900">
+                          {group.title}
+                        </span>
+                        <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                          {group.boxes.length} {group.boxes.length === 1 ? 'Pitch' : 'Pitches'}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-0.5">{group.desc}</p>
+                    </div>
+                  </div>
+                </div>
 
-            {/* Turf Arena Type */}
-            <div className="p-3.5 rounded-2xl bg-white border border-slate-100 shadow-sm space-y-1">
-              <div className="w-7 h-7 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center text-xs mb-1">
-                🏟️
-              </div>
-              <div className="text-[10px] text-slate-400 font-medium">Turf Arena Type</div>
-              <div className="text-sm font-black text-slate-900">
-                {selectedBox?.type === 'THREE_SIXTY' 
-                  ? '360° Enclosed Turf' 
-                  : selectedBox?.type === 'OPEN' 
-                  ? 'Open Sky Box' 
-                  : 'Indoor Turf'}
-              </div>
-            </div>
+                {/* Individual Pitches in this category */}
+                <div className="space-y-2.5">
+                  {group.boxes.map((box, boxIdx) => (
+                    <div
+                      key={box.id}
+                      className="p-3.5 rounded-2xl bg-slate-50/70 hover:bg-slate-50 border border-slate-200/80 transition-all space-y-2.5"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-start space-x-2.5 min-w-0">
+                          <div className="w-8 h-8 rounded-xl bg-white border border-slate-200 text-emerald-800 font-black text-xs flex items-center justify-center flex-shrink-0 shadow-2xs">
+                            {box.name.replace(/\D/g, '') ? `#${box.name.replace(/\D/g, '')}` : `#${boxIdx + 1}`}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-xs font-black text-slate-900 truncate">
+                                {box.name}
+                              </span>
+                              <span className="px-1.5 py-0.2 rounded bg-white text-[9px] font-mono font-bold text-slate-700 border border-slate-200">
+                                {box.widthFt} × {box.heightFt} ft
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 text-[10px] text-slate-500 font-medium mt-0.5">
+                              <span>👥 Ideal {box.maxPlayers / 2}v{box.maxPlayers / 2} ({box.maxPlayers} Players)</span>
+                              <span>•</span>
+                              <span>⏰ {formatTimeAMPM(box.schedules?.[0]?.openTime || '06:00')} - {formatTimeAMPM(box.schedules?.[0]?.closeTime || '02:00')}</span>
+                            </div>
+                          </div>
+                        </div>
 
-            {/* Squad Capacity */}
-            <div className="p-3.5 rounded-2xl bg-white border border-slate-100 shadow-sm space-y-1">
-              <div className="w-7 h-7 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center text-xs mb-1">
-                👥
-              </div>
-              <div className="text-[10px] text-slate-400 font-medium">Squad Format</div>
-              <div className="text-sm font-black text-slate-900">
-                {(selectedBox?.maxPlayers || 14) / 2}v{(selectedBox?.maxPlayers || 14) / 2} ({selectedBox?.maxPlayers || 14} Players)
-              </div>
-            </div>
+                        <div className="text-right flex-shrink-0">
+                          <div className="text-sm font-black text-emerald-800">
+                            ₹{box.basePrice}<span className="text-[9px] font-normal text-slate-400">/hr</span>
+                          </div>
+                        </div>
+                      </div>
 
-            {/* Open to Close Time */}
-            <div className="p-3.5 rounded-2xl bg-white border border-slate-100 shadow-sm space-y-1">
-              <div className="w-7 h-7 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center text-xs mb-1">
-                ⏰
-              </div>
-              <div className="text-[10px] text-slate-400 font-medium">Open to Close Time</div>
-              <div className="text-xs sm:text-sm font-black text-slate-900 tracking-tight">
-                {formatTimeAMPM(selectedBox?.schedules?.[0]?.openTime || '06:00')} - {formatTimeAMPM(selectedBox?.schedules?.[0]?.closeTime || '02:00')}
-              </div>
-            </div>
+                      {/* Action Button for this specific Pitch */}
+                      <button
+                        type="button"
+                        onClick={() => handleOpenSlots(box)}
+                        className="w-full py-2.5 rounded-xl bg-[#065f46] hover:bg-[#047857] active:scale-98 text-white font-bold text-xs flex items-center justify-center space-x-1.5 transition-all shadow-sm cursor-pointer"
+                      >
+                        <Zap className="w-3.5 h-3.5 text-amber-300" />
+                        <span>View Slots for {box.name}</span>
+                        <ChevronRight className="w-3.5 h-3.5 ml-0.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
 
+              </div>
+            ))}
           </div>
         </div>
 
@@ -431,65 +479,6 @@ export default function GroundDetailPage() {
             </div>
           );
         })()}
-
-        {/* 6. Available Boxes */}
-        <div>
-          <div className="flex items-center justify-between mb-2.5">
-            <h3 className="text-sm font-black text-slate-900">Available Boxes</h3>
-            <span className="text-[11px] text-slate-400 font-medium">
-              {ground.boxes.length} pitches on site
-            </span>
-          </div>
-
-          <div className="space-y-3">
-            {ground.boxes.map((box) => (
-              <div
-                key={box.id}
-                className={`p-4 rounded-2xl bg-white border transition-all shadow-sm space-y-3 ${
-                  selectedBox?.id === box.id ? 'border-emerald-300 ring-1 ring-emerald-200' : 'border-slate-200'
-                }`}
-                onClick={() => setSelectedBox(box)}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-800 font-black text-base flex items-center justify-center border border-emerald-200">
-                      {box.name.charAt(box.name.length - 1)}
-                    </div>
-                    <div>
-                      <div className="flex items-center space-x-2">
-                        <span className="text-sm font-black text-slate-900">{box.name}</span>
-                        <span className="px-2 py-0.5 rounded-md bg-slate-100 text-[10px] font-bold text-slate-700">
-                          {box.widthFt} × {box.heightFt} ft
-                        </span>
-                      </div>
-                      <div className="text-xs text-slate-500 mt-0.5">
-                        {box.type === 'THREE_SIXTY' ? '360° Net Turf' : 'Open Box'} • Ideal for {box.maxPlayers / 2}v{box.maxPlayers / 2}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="text-right">
-                    <div className="text-base font-black text-emerald-800">
-                      ₹{box.basePrice}<span className="text-[10px] font-normal text-slate-400">/hr</span>
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleOpenSlots(box);
-                  }}
-                  className="w-full py-2.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs flex items-center justify-center space-x-1.5 transition-colors cursor-pointer"
-                >
-                  <span>View Slots for {box.name}</span>
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
 
         {/* 7. Location & Traffic Map */}
         <div>

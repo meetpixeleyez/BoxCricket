@@ -94,14 +94,21 @@ interface AppContextType {
   addOfflineBlock: (block: Omit<OfflineBlock, 'id'>) => void;
   removeOfflineBlock: (id: string) => void;
 
-  // Find Players & Matchmaking
   availabilityPosts: AvailabilityPost[];
-  createAvailabilityPost: (post: Omit<AvailabilityPost, 'id' | 'playerId' | 'playerName' | 'playerPhone' | 'createdAt' | 'status'>) => AvailabilityPost;
+  createAvailabilityPost: (post: Omit<AvailabilityPost, 'id' | 'playerId' | 'playerName' | 'createdAt' | 'status'> & { playerPhone?: string }) => AvailabilityPost;
+  updateAvailabilityPost: (id: string, updates: Partial<AvailabilityPost>) => void;
+  updateAvailabilityPostStatus: (id: string, status: 'ACTIVE' | 'EXPIRED' | 'MATCHED') => void;
+  deleteAvailabilityPost: (id: string) => void;
   teamPosts: TeamPost[];
-  createTeamPost: (post: Omit<TeamPost, 'id' | 'captainId' | 'captainName' | 'captainPhone' | 'createdAt' | 'status'>) => TeamPost;
+  createTeamPost: (post: Omit<TeamPost, 'id' | 'captainId' | 'captainName' | 'createdAt' | 'status'> & { captainPhone?: string }) => TeamPost;
+  updateTeamPost: (id: string, updates: Partial<TeamPost>) => void;
+  updateTeamPostStatus: (id: string, status: 'OPEN' | 'FILLED' | 'CLOSED') => void;
+  deleteTeamPost: (id: string) => void;
   joinRequests: JoinRequest[];
   sendJoinRequest: (req: Omit<JoinRequest, 'id' | 'senderId' | 'senderName' | 'senderPhone' | 'senderRole' | 'senderSkill' | 'createdAt' | 'status'>) => JoinRequest;
   respondJoinRequest: (requestId: string, status: 'ACCEPTED' | 'REJECTED', rejectMessage?: string) => void;
+  deleteJoinRequest: (requestId: string) => void;
+  clearResolvedIncomingRequests: (userId: string) => void;
 
   // Teams & Challenges
   teams: Team[];
@@ -341,7 +348,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [joinRequests, setJoinRequests] = useState<JoinRequest[]>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('boxkhel_join_requests');
-      if (saved) try { return JSON.parse(saved); } catch (e) {}
+      if (saved) {
+        try {
+          const parsed: JoinRequest[] = JSON.parse(saved);
+          const seen = new Set<string>();
+          const deduped: JoinRequest[] = [];
+          for (const r of parsed) {
+            const key = `${r.senderId}_${r.targetPostId}_${r.status}`;
+            if (!seen.has(key)) {
+              seen.add(key);
+              deduped.push(r);
+            }
+          }
+          return deduped;
+        } catch (e) {}
+      }
     }
     return [
       {
@@ -656,13 +677,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   // Find Players
-  const createAvailabilityPost = (post: Omit<AvailabilityPost, 'id' | 'playerId' | 'playerName' | 'playerPhone' | 'createdAt' | 'status'>): AvailabilityPost => {
+  const createAvailabilityPost = (post: Omit<AvailabilityPost, 'id' | 'playerId' | 'playerName' | 'createdAt' | 'status'> & { playerPhone?: string }): AvailabilityPost => {
     const newPost: AvailabilityPost = {
       ...post,
       id: `avail_${Date.now()}`,
       playerId: currentUser.id,
       playerName: currentUser.name,
-      playerPhone: currentUser.phone,
+      playerPhone: post.playerPhone?.trim() || currentUser.phone,
       playerPhoto: currentUser.photoUrl,
       status: 'ACTIVE',
       createdAt: new Date().toISOString()
@@ -671,13 +692,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return newPost;
   };
 
-  const createTeamPost = (post: Omit<TeamPost, 'id' | 'captainId' | 'captainName' | 'captainPhone' | 'createdAt' | 'status'>): TeamPost => {
+  const createTeamPost = (post: Omit<TeamPost, 'id' | 'captainId' | 'captainName' | 'createdAt' | 'status'> & { captainPhone?: string }): TeamPost => {
     const newPost: TeamPost = {
       ...post,
       id: `teampost_${Date.now()}`,
       captainId: currentUser.id,
       captainName: currentUser.name,
-      captainPhone: currentUser.phone,
+      captainPhone: post.captainPhone?.trim() || currentUser.phone,
       status: 'OPEN',
       createdAt: new Date().toISOString()
     };
@@ -686,6 +707,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const sendJoinRequest = (req: Omit<JoinRequest, 'id' | 'senderId' | 'senderName' | 'senderPhone' | 'senderRole' | 'senderSkill' | 'createdAt' | 'status'>): JoinRequest => {
+    // Check if an active/pending request already exists to prevent duplicates
+    const existingReq = joinRequests.find(r => r.senderId === currentUser.id && r.targetPostId === req.targetPostId && r.status !== 'REJECTED');
+    if (existingReq) {
+      return existingReq;
+    }
+
     const newReq: JoinRequest = {
       ...req,
       id: `req_${Date.now()}`,
@@ -714,13 +741,86 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return newReq;
   };
 
+  const updateAvailabilityPost = (id: string, updates: Partial<AvailabilityPost>) => {
+    setAvailabilityPosts(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
+  };
+
+  const updateAvailabilityPostStatus = (id: string, status: 'ACTIVE' | 'EXPIRED' | 'MATCHED') => {
+    setAvailabilityPosts(prev => prev.map(p => p.id === id ? { ...p, status } : p));
+    if (status === 'EXPIRED') {
+      setJoinRequests(prev => prev.filter(r => r.targetPostId !== id));
+    }
+  };
+
+  const deleteAvailabilityPost = (id: string) => {
+    setAvailabilityPosts(prev => prev.filter(p => p.id !== id));
+    setJoinRequests(prev => prev.filter(r => r.targetPostId !== id));
+  };
+
+  const updateTeamPost = (id: string, updates: Partial<TeamPost>) => {
+    setTeamPosts(prev => prev.map(p => {
+      if (p.id === id) {
+        const updated = { ...p, ...updates };
+        if (updated.neededPlayers <= 0 && updated.status === 'OPEN') {
+          updated.status = 'FILLED';
+        } else if (updated.neededPlayers > 0 && updated.status === 'FILLED' && updates.neededPlayers !== undefined) {
+          updated.status = 'OPEN';
+        }
+        return updated;
+      }
+      return p;
+    }));
+  };
+
+  const updateTeamPostStatus = (id: string, status: 'OPEN' | 'FILLED' | 'CLOSED') => {
+    setTeamPosts(prev => prev.map(p => p.id === id ? { ...p, status } : p));
+    if (status === 'CLOSED') {
+      setJoinRequests(prev => prev.filter(r => r.targetPostId !== id));
+    }
+  };
+
+  const deleteTeamPost = (id: string) => {
+    setTeamPosts(prev => prev.filter(p => p.id !== id));
+    setJoinRequests(prev => prev.filter(r => r.targetPostId !== id));
+  };
+
   const respondJoinRequest = (requestId: string, status: 'ACCEPTED' | 'REJECTED', rejectMessage?: string) => {
     setJoinRequests(prev => prev.map(r => {
       if (r.id === requestId) {
+        // If accepted on a team post, decrement neededPlayers
+        if (status === 'ACCEPTED' && r.postType === 'TEAM_POST') {
+          setTeamPosts(tPosts => tPosts.map(tp => {
+            if (tp.id === r.targetPostId) {
+              const updatedNeeded = Math.max(0, tp.neededPlayers - 1);
+              return {
+                ...tp,
+                neededPlayers: updatedNeeded,
+                status: updatedNeeded === 0 ? 'FILLED' : 'OPEN'
+              };
+            }
+            return tp;
+          }));
+        } else if (status === 'ACCEPTED' && r.postType === 'AVAILABILITY') {
+          setAvailabilityPosts(aPosts => aPosts.map(ap => {
+            if (ap.id === r.targetPostId) {
+              return { ...ap, status: 'MATCHED' };
+            }
+            return ap;
+          }));
+        }
+
         return { ...r, status, rejectMessage };
       }
       return r;
     }));
+  };
+
+  const deleteJoinRequest = (requestId: string) => {
+    setJoinRequests(prev => prev.filter(r => r.id !== requestId));
+  };
+
+  const clearResolvedIncomingRequests = (userId: string) => {
+    setJoinRequests(prev => prev.filter(r => !(r.receiverId === userId && r.status !== 'PENDING')));
   };
 
   // Teams & Challenges
@@ -855,11 +955,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         removeOfflineBlock,
         availabilityPosts,
         createAvailabilityPost,
+        updateAvailabilityPost,
+        updateAvailabilityPostStatus,
+        deleteAvailabilityPost,
         teamPosts,
         createTeamPost,
+        updateTeamPost,
+        updateTeamPostStatus,
+        deleteTeamPost,
         joinRequests,
         sendJoinRequest,
         respondJoinRequest,
+        deleteJoinRequest,
+        clearResolvedIncomingRequests,
         teams,
         createTeam,
         challenges,

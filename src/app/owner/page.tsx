@@ -266,7 +266,7 @@ export default function OwnerGroundRegistrationPage() {
   const [pitches, setPitches] = useState<PitchFormState[]>([
     {
       id: 'pitch_1',
-      name: 'Box A (Main Floodlight Pitch)',
+      name: 'Box 1',
       type: 'THREE_SIXTY',
       widthFt: '45',
       lengthFt: '75',
@@ -277,7 +277,66 @@ export default function OwnerGroundRegistrationPage() {
       slotDuration: '60',
       images: [
         'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=800&auto=format&fit=crop&q=80',
-        'https://images.unsplash.com/photo-1531415074868-036b1c57e329?w=800&auto=format&fit=crop&q=80'
+      ]
+    },
+    {
+      id: 'pitch_2',
+      name: 'Box 2',
+      type: 'THREE_SIXTY',
+      widthFt: '45',
+      lengthFt: '75',
+      squadFormat: '7v7',
+      dayRate: '700',
+      primeRate: '900',
+      weekendRate: '1000',
+      slotDuration: '60',
+      images: [
+        'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=800&auto=format&fit=crop&q=80',
+      ]
+    },
+    {
+      id: 'pitch_3',
+      name: 'Box 3',
+      type: 'OPEN',
+      widthFt: '40',
+      lengthFt: '70',
+      squadFormat: '6v6',
+      dayRate: '600',
+      primeRate: '750',
+      weekendRate: '850',
+      slotDuration: '60',
+      images: [
+        'https://images.unsplash.com/photo-1531415074868-036b1c57e329?w=800&auto=format&fit=crop&q=80',
+      ]
+    },
+    {
+      id: 'pitch_4',
+      name: 'Box 4',
+      type: 'OPEN',
+      widthFt: '40',
+      lengthFt: '70',
+      squadFormat: '6v6',
+      dayRate: '600',
+      primeRate: '750',
+      weekendRate: '850',
+      slotDuration: '60',
+      images: [
+        'https://images.unsplash.com/photo-1531415074868-036b1c57e329?w=800&auto=format&fit=crop&q=80',
+      ]
+    },
+    {
+      id: 'pitch_5',
+      name: 'Box 5',
+      type: 'OPEN',
+      widthFt: '40',
+      lengthFt: '70',
+      squadFormat: '6v6',
+      dayRate: '600',
+      primeRate: '750',
+      weekendRate: '850',
+      slotDuration: '60',
+      images: [
+        'https://images.unsplash.com/photo-1531415074868-036b1c57e329?w=800&auto=format&fit=crop&q=80',
       ]
     }
   ]);
@@ -435,13 +494,81 @@ export default function OwnerGroundRegistrationPage() {
     );
   };
 
-  // Add another pitch in Step 2
+  // Helper to update pitch count for a specific TurfType tag with auto continuous box assignment
+  const handleUpdatePitchCountForType = (type: TurfType, newCount: number) => {
+    if (newCount < 0) return;
+
+    const currentPitchesOfType = pitches.filter((p) => p.type === type);
+    const otherPitches = pitches.filter((p) => p.type !== type);
+
+    if (newCount === 0 && otherPitches.length === 0) {
+      setDeleteWarningToast("At least 1 pitch / box is required for your ground registration.");
+      setTimeout(() => setDeleteWarningToast(null), 3000);
+      return;
+    }
+
+    let newPitchesOfType: PitchFormState[] = [];
+
+    if (newCount <= currentPitchesOfType.length) {
+      newPitchesOfType = currentPitchesOfType.slice(0, newCount);
+    } else {
+      newPitchesOfType = [...currentPitchesOfType];
+      const template = currentPitchesOfType[0] || {
+        id: `pitch_${Date.now()}`,
+        name: '',
+        type,
+        widthFt: type === 'THREE_SIXTY' ? '45' : type === 'CLOSED' ? '50' : '40',
+        lengthFt: type === 'THREE_SIXTY' ? '75' : type === 'CLOSED' ? '80' : '70',
+        squadFormat: '7v7',
+        dayRate: type === 'THREE_SIXTY' ? '700' : type === 'CLOSED' ? '800' : '600',
+        primeRate: type === 'THREE_SIXTY' ? '900' : type === 'CLOSED' ? '1000' : '750',
+        weekendRate: type === 'THREE_SIXTY' ? '1000' : type === 'CLOSED' ? '1100' : '850',
+        slotDuration: '60',
+        images: [SAMPLE_PHOTOS[0].url],
+      };
+
+      for (let i = currentPitchesOfType.length; i < newCount; i++) {
+        newPitchesOfType.push({
+          ...template,
+          id: `pitch_${Date.now()}_${i}`,
+          name: '', // will be assigned below
+        });
+      }
+    }
+
+    // Re-index all pitches across types in order: THREE_SIXTY, OPEN, CLOSED
+    const typeOrder: TurfType[] = ['THREE_SIXTY', 'OPEN', 'CLOSED'];
+    const groups: Record<TurfType, PitchFormState[]> = {
+      THREE_SIXTY: type === 'THREE_SIXTY' ? newPitchesOfType : pitches.filter((p) => p.type === 'THREE_SIXTY'),
+      OPEN: type === 'OPEN' ? newPitchesOfType : pitches.filter((p) => p.type === 'OPEN'),
+      CLOSED: type === 'CLOSED' ? newPitchesOfType : pitches.filter((p) => p.type === 'CLOSED'),
+    };
+
+    const reindexed: PitchFormState[] = [];
+    let boxCounter = 1;
+
+    typeOrder.forEach((t) => {
+      groups[t].forEach((p) => {
+        reindexed.push({
+          ...p,
+          name: `Box ${boxCounter}`,
+        });
+        boxCounter++;
+      });
+    });
+
+    setPitches(reindexed);
+    setActivePitchIndex((prev) => Math.min(prev, Math.max(0, reindexed.length - 1)));
+    setSaveSuccessMessage(`Pitches updated: ${reindexed.length} total pitches configured! 🏏`);
+    setTimeout(() => setSaveSuccessMessage(null), 2500);
+  };
+
+  // Add another pitch in Step 2 with continuous numbering
   const handleAddNewPitch = () => {
-    const nextPitchNumber = pitches.length + 1;
-    const newPitchLetter = String.fromCharCode(65 + pitches.length);
+    const nextNumber = pitches.length + 1;
     const newP: PitchFormState = {
       id: `pitch_${Date.now()}`,
-      name: `Box ${newPitchLetter} (Turf ${nextPitchNumber})`,
+      name: `Box ${nextNumber}`,
       type: 'THREE_SIXTY',
       widthFt: '45',
       lengthFt: '75',
@@ -931,60 +1058,99 @@ export default function OwnerGroundRegistrationPage() {
           </div>
         </div>
 
-        {/* 4. Active Pitches Overview */}
+        {/* 4. Active Pitches Overview Grouped by Turf Type Tag */}
         <div className="p-4 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between pb-1 border-b border-slate-100">
             <div className="flex items-center space-x-2">
               <span className="text-base">🏏</span>
-              <h3 className="text-xs font-black text-slate-900">Your Active Pitches</h3>
+              <div>
+                <h3 className="text-xs font-black text-slate-900">Your Configured Pitches</h3>
+                <p className="text-[10px] text-slate-400">{existingGround.boxes.length} Pitches across Turf Type Tags</p>
+              </div>
             </div>
             <button
               onClick={() => {
                 populateFormWithGround(existingGround);
                 setIsEditingExisting(true);
-                handleAddNewPitch();
                 setCurrentStep(2);
                 setViewMode('WIZARD');
               }}
-              className="text-[11px] font-bold text-[#ff6813] hover:underline flex items-center space-x-1"
+              className="px-2.5 py-1 rounded-xl bg-orange-50 text-[#ff6813] border border-orange-200 text-[10px] font-black flex items-center space-x-1 hover:bg-orange-100 transition-all cursor-pointer"
             >
               <Plus className="w-3 h-3" />
-              <span>Add Box</span>
+              <span>Manage Pitches</span>
             </button>
           </div>
 
-          <div className="space-y-2">
-            {existingGround.boxes.map((b, idx) => (
-              <div key={b.id || idx} className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between">
-                <div>
-                  <div className="flex items-center space-x-1.5">
-                    <h4 className="text-xs font-bold text-slate-900">{b.name}</h4>
-                    <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[9px] font-bold">
-                      {b.type === 'THREE_SIXTY' ? '360° Closed' : b.type === 'OPEN' ? 'Open Turf' : 'Covered'}
+          <div className="space-y-3">
+            {(() => {
+              const groups: Record<string, { type: TurfType; title: string; icon: string; boxes: Box[] }> = {};
+              existingGround.boxes.forEach((b) => {
+                const key = b.type || 'THREE_SIXTY';
+                if (!groups[key]) {
+                  let title = '360° Turf Arena';
+                  let icon = '🕸️';
+                  if (key === 'OPEN') {
+                    title = 'Open Sky Box';
+                    icon = '🌤️';
+                  } else if (key === 'CLOSED') {
+                    title = 'Covered Roof Turf';
+                    icon = '🏠';
+                  }
+                  groups[key] = { type: key, title, icon, boxes: [] };
+                }
+                groups[key].boxes.push(b);
+              });
+
+              return Object.values(groups).map((grp) => (
+                <div key={grp.type} className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
+                  <div className="flex items-center justify-between pb-1.5 border-b border-slate-200/60">
+                    <div className="flex items-center space-x-1.5 text-xs font-black text-slate-900">
+                      <span>{grp.icon}</span>
+                      <span>Tag: {grp.title}</span>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                      {grp.boxes.length} {grp.boxes.length === 1 ? 'Pitch' : 'Pitches'}
                     </span>
                   </div>
-                  <div className="text-[10px] text-slate-500 mt-0.5">
-                    {b.widthFt}x{b.heightFt || 75} ft • {b.maxPlayers} Players • {b.slotMinutes || 60} min slot
+
+                  <div className="space-y-1.5">
+                    {grp.boxes.map((b, idx) => (
+                      <div key={b.id || idx} className="p-2.5 rounded-xl bg-white border border-slate-200 flex items-center justify-between">
+                        <div>
+                          <div className="flex items-center space-x-1.5">
+                            <h4 className="text-xs font-black text-slate-900">{b.name}</h4>
+                            <span className="text-[9px] font-mono font-bold text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200">
+                              {b.widthFt} × {b.heightFt || 75} ft
+                            </span>
+                          </div>
+                          <div className="text-[10px] text-slate-500 mt-0.5">
+                            Ideal {b.maxPlayers / 2}v{b.maxPlayers / 2} • {b.slotMinutes || 60} min slot
+                          </div>
+                        </div>
+
+                        <div className="text-right">
+                          <div className="text-xs font-black text-emerald-800">₹{b.basePrice}/hr</div>
+                          <button
+                            onClick={() => {
+                              populateFormWithGround(existingGround);
+                              setIsEditingExisting(true);
+                              const pIdx = existingGround.boxes.findIndex(bx => bx.id === b.id);
+                              setActivePitchIndex(pIdx !== -1 ? pIdx : 0);
+                              setCurrentStep(2);
+                              setViewMode('WIZARD');
+                            }}
+                            className="text-[10px] text-emerald-700 font-bold hover:underline"
+                          >
+                            Edit
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-
-                <div className="text-right">
-                  <div className="text-xs font-black text-[#ff6813]">₹{b.basePrice}/hr</div>
-                  <button
-                    onClick={() => {
-                      populateFormWithGround(existingGround);
-                      setIsEditingExisting(true);
-                      setActivePitchIndex(idx);
-                      setCurrentStep(2);
-                      setViewMode('WIZARD');
-                    }}
-                    className="text-[10px] text-emerald-700 font-bold hover:underline"
-                  >
-                    Edit Rates
-                  </button>
-                </div>
-              </div>
-            ))}
+              ));
+            })()}
           </div>
         </div>
 
@@ -1712,6 +1878,102 @@ export default function OwnerGroundRegistrationPage() {
       {currentStep === 2 && (
         <div className="space-y-4 animate-in fade-in duration-200">
           
+          {/* Turf Types & Pitches Architecture Tag Card */}
+          <div className="p-4 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-3.5">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 rounded-xl bg-emerald-50 text-[#065f46] flex items-center justify-center text-sm font-bold shadow-2xs">
+                  🏷️
+                </div>
+                <div>
+                  <h3 className="text-xs font-black text-slate-900 tracking-tight">Turf Types & Pitches Architecture</h3>
+                  <p className="text-[10px] text-slate-400">Tag મુજબ બોક્સ કાઉન્ટ નક્કી કરો (Auto-assigns Box 1, 2, 3..)</p>
+                </div>
+              </div>
+              <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black border border-emerald-200">
+                {pitches.length} {pitches.length === 1 ? 'Pitch' : 'Pitches'} Total
+              </span>
+            </div>
+
+            {/* Tags Grid with Real-Time Counter & Assigned Boxes */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              {[
+                { type: 'THREE_SIXTY' as TurfType, title: '360° Turf Arena', icon: '🕸️', desc: 'Full Enclosed Netting' },
+                { type: 'OPEN' as TurfType, title: 'Open Sky Box', icon: '🌤️', desc: 'Natural Open Air Box' },
+                { type: 'CLOSED' as TurfType, title: 'Covered Roof Turf', icon: '🏠', desc: 'All-Weather Shed Turf' },
+              ].map((tag) => {
+                const typePitches = pitches.filter((p) => p.type === tag.type);
+                const count = typePitches.length;
+                
+                return (
+                  <div 
+                    key={tag.type} 
+                    className={`p-3 rounded-2xl border transition-all ${
+                      count > 0 
+                        ? 'bg-emerald-50/40 border-emerald-300 shadow-2xs' 
+                        : 'bg-slate-50/70 border-slate-200/80 opacity-85 hover:opacity-100'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-1 mb-2">
+                      <div className="flex items-center space-x-1.5">
+                        <span className="text-base">{tag.icon}</span>
+                        <div>
+                          <span className="text-xs font-black text-slate-900 block leading-tight">{tag.title}</span>
+                          <span className="text-[9px] text-slate-400">{tag.desc}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Stepper Count for this Tag */}
+                    <div className="flex items-center justify-between pt-1 border-t border-slate-200/60">
+                      <span className="text-[10px] font-bold text-slate-600">Pitches Count:</span>
+                      
+                      <div className="flex items-center space-x-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleUpdatePitchCountForType(tag.type, count - 1)}
+                          disabled={count === 0}
+                          className="w-6 h-6 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 disabled:opacity-30 disabled:cursor-not-allowed font-bold text-xs flex items-center justify-center transition-colors cursor-pointer"
+                          title="Remove 1 pitch"
+                        >
+                          -
+                        </button>
+
+                        <span className="w-7 text-center font-black text-xs text-slate-900">
+                          {count}
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={() => handleUpdatePitchCountForType(tag.type, count + 1)}
+                          className="w-6 h-6 rounded-lg bg-[#065f46] hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center shadow-2xs transition-colors cursor-pointer"
+                          title="Add 1 pitch"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Assigned Boxes Chips */}
+                    {count > 0 && (
+                      <div className="mt-2 pt-1.5 border-t border-emerald-100 flex flex-wrap gap-1 items-center">
+                        <span className="text-[9px] text-emerald-800 font-bold">Assigned:</span>
+                        {typePitches.map((p) => (
+                          <span 
+                            key={p.id}
+                            className="px-1.5 py-0.2 rounded bg-white text-[9px] font-mono font-black text-emerald-900 border border-emerald-200 shadow-2xs"
+                          >
+                            {p.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Multiple Pitch Selector Control Bar */}
           <div className="p-3.5 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-3">
             {/* Header: Title + Count + Pinned Always-Visible Add Box Button */}
@@ -3125,25 +3387,57 @@ export default function OwnerGroundRegistrationPage() {
               </button>
             </div>
 
-            <div className="space-y-2">
-              {pitches.map((p, idx) => (
-                <div key={p.id || idx} className="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-slate-900">{p.name}</span>
-                    <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
-                      {p.type === 'THREE_SIXTY' ? '360° Closed' : p.type === 'OPEN' ? 'Open Turf' : 'Covered'}
-                    </span>
+            <div className="space-y-3">
+              {(() => {
+                const groups: Record<string, { type: TurfType; title: string; icon: string; pitches: PitchFormState[] }> = {};
+                pitches.forEach((p) => {
+                  const key = p.type || 'THREE_SIXTY';
+                  if (!groups[key]) {
+                    let title = '360° Turf Arena';
+                    let icon = '🕸️';
+                    if (key === 'OPEN') {
+                      title = 'Open Sky Box';
+                      icon = '🌤️';
+                    } else if (key === 'CLOSED') {
+                      title = 'Covered Roof Turf';
+                      icon = '🏠';
+                    }
+                    groups[key] = { type: key, title, icon, pitches: [] };
+                  }
+                  groups[key].pitches.push(p);
+                });
+
+                return Object.values(groups).map((grp) => (
+                  <div key={grp.type} className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
+                    <div className="flex items-center justify-between pb-1.5 border-b border-slate-200/60">
+                      <div className="flex items-center space-x-1.5 text-xs font-black text-slate-900">
+                        <span>{grp.icon}</span>
+                        <span>Tag ({grp.title})</span>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                        {grp.pitches.length} {grp.pitches.length === 1 ? 'Pitch' : 'Pitches'}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      {grp.pitches.map((p, idx) => (
+                        <div key={p.id || idx} className="p-2.5 rounded-xl bg-white border border-slate-200 text-xs space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="font-black text-slate-900">{p.name}</span>
+                            <span className="text-[10px] font-mono text-slate-500 font-bold">
+                              {p.widthFt} × {p.lengthFt} ft
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-[10px] text-slate-500 pt-0.5">
+                            <span>👥 {p.squadFormat} Format</span>
+                            <span className="font-bold text-emerald-800">₹{p.primeRate}/hr</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div className="text-[11px] text-slate-500">
-                    Dimensions: {p.widthFt}x{p.lengthFt} ft • Format: {p.squadFormat} • Slot: {p.slotDuration} min
-                  </div>
-                  <div className="flex items-center space-x-3 text-[11px] pt-1 border-t border-slate-200/60 font-bold">
-                    <span className="text-slate-600">Day: <strong className="text-slate-900">₹{p.dayRate}</strong>/hr</span>
-                    <span className="text-[#ff6813]">Night: <strong>₹{p.primeRate}</strong>/hr</span>
-                    <span className="text-emerald-700">Weekend: <strong>₹{p.weekendRate}</strong>/hr</span>
-                  </div>
-                </div>
-              ))}
+                ));
+              })()}
             </div>
           </div>
 

@@ -384,23 +384,9 @@ export default function HomePage() {
         })}
       </div>
 
-      {/* 3. Three Quick Action Tiles */}
-      <div className="grid grid-cols-3 gap-2.5">
-        {/* Tile 1: Book a Slot */}
-        <button
-          onClick={() => filteredGrounds[0] && handleOpenBooking(filteredGrounds[0])}
-          className="p-3 rounded-2xl bg-[#ecfdf5] border border-emerald-100 text-left flex flex-col justify-between hover:shadow-md transition-all group cursor-pointer"
-        >
-          <div className="w-9 h-9 rounded-xl bg-emerald-100/90 flex items-center justify-center text-emerald-800 text-base mb-2 group-hover:scale-105 transition-transform">
-            🏏
-          </div>
-          <div>
-            <div className="text-xs font-black text-slate-900 leading-tight">Book a Slot</div>
-            <div className="text-[10px] text-emerald-700 font-semibold mt-0.5">Instant Turf</div>
-          </div>
-        </button>
-
-        {/* Tile 2: Find Players */}
+      {/* 3. Quick Action Tiles */}
+      <div className="grid grid-cols-2 gap-2.5">
+        {/* Tile 1: Find Players */}
         <Link
           href="/find-players"
           className="p-3 rounded-2xl bg-[#fff7ed] border border-orange-100 text-left flex flex-col justify-between hover:shadow-md transition-all group"
@@ -414,7 +400,7 @@ export default function HomePage() {
           </div>
         </Link>
 
-        {/* Tile 3: Challenge */}
+        {/* Tile 2: Challenge */}
         <Link
           href="/teams"
           className="p-3 rounded-2xl bg-[#1e293b] text-white text-left flex flex-col justify-between hover:shadow-md transition-all group shadow-sm"
@@ -429,62 +415,6 @@ export default function HomePage() {
         </Link>
       </div>
 
-      {/* 4. Urgent Squad Call Banner */}
-      <div className="rounded-2xl bg-white border border-slate-200 p-4 shadow-sm relative overflow-hidden">
-        <div className="absolute top-0 left-0 bottom-0 w-1.5 bg-[#ff6813]" />
-        
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center space-x-1.5">
-            <span className="w-2 h-2 rounded-full bg-[#ff6813] animate-ping" />
-            <span className="text-[10px] font-black tracking-wider uppercase text-[#ff6813]">
-              URGENT CALL • LIVE IN SURAT
-            </span>
-          </div>
-          <span className="px-2 py-0.5 rounded-full bg-orange-50 text-[11px] font-bold text-orange-800 border border-orange-200">
-            ₹120/player
-          </span>
-        </div>
-
-        <div className="flex items-start space-x-3 mb-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center font-black text-blue-900 text-xs flex-shrink-0">
-            VS
-          </div>
-          <div className="flex-1">
-            <div className="flex items-center space-x-1">
-              <span className="text-sm font-black text-slate-900">Varachha Strikers</span>
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-            </div>
-            <p className="text-xs font-bold text-slate-700 mt-0.5">
-              Need <strong className="text-slate-950 underline">2 Batsmen</strong> tonight at 9:00 PM
-            </p>
-            <div className="flex items-center space-x-1 text-[11px] text-slate-500 mt-1">
-              <MapPin className="w-3 h-3 text-slate-400" />
-              <span>Kings Turf, Adajan • Hard Tennis Ball</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-          <div className="flex items-center -space-x-1.5">
-            {['P1', 'P2', 'P3'].map((p, i) => (
-              <div key={i} className="w-6 h-6 rounded-full bg-slate-200 border-2 border-white text-[9px] font-bold flex items-center justify-center text-slate-700">
-                {p}
-              </div>
-            ))}
-            <div className="w-6 h-6 rounded-full bg-orange-100 border-2 border-white text-[9px] font-bold flex items-center justify-center text-orange-800">
-              +6
-            </div>
-          </div>
-
-          <Link
-            href="/find-players"
-            className="px-4 py-2 stitch-btn-orange text-xs flex items-center space-x-1.5"
-          >
-            <span>Join Squad</span>
-            <ChevronRight className="w-3.5 h-3.5" />
-          </Link>
-        </div>
-      </div>
 
       {/* 5. Box Cricket Grounds Listing (Dynamic Contextual Title) */}
       <div>
