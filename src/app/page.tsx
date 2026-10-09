@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { SlotPickerModal } from '@/components/SlotPickerModal';
 import { BookingCheckoutModal } from '@/components/BookingCheckoutModal';
+import { HomeMatchmakingCarousel } from '@/components/HomeMatchmakingCarousel';
 import { Ground, Box, TurfType } from '@/types';
 import { AMENITY_OPTIONS, normalizeAmenity } from '@/lib/mockData';
 
@@ -415,6 +416,8 @@ export default function HomePage() {
         </Link>
       </div>
 
+      {/* 4. Live Local Matchmaking Carousel Slider (Solo Players & Team Requirements) */}
+      <HomeMatchmakingCarousel selectedArea={selectedArea} />
 
       {/* 5. Box Cricket Grounds Listing (Dynamic Contextual Title) */}
       <div>

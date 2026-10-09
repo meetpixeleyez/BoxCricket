@@ -31,7 +31,7 @@ import {
   CalendarDays
 } from 'lucide-react';
 import { Booking } from '@/types';
-import { formatSlotTimeRange, formatDateDisplay } from '@/lib/dateUtils';
+import { formatSlotTimeRange, formatDateDisplay, getTodayDateString } from '@/lib/dateUtils';
 import { CancelBookingModal } from '@/components/CancelBookingModal';
 
 export default function MyBookingsPage() {
@@ -117,7 +117,8 @@ export default function MyBookingsPage() {
     // 3. Date Range Filter
     if (datePreset !== 'ALL_TIME') {
       const today = new Date();
-      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      const todayStr = getTodayDateString(0);
+      const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
       const currentMonth = today.getMonth();
       const currentYear = today.getFullYear();
 
@@ -130,8 +131,9 @@ export default function MyBookingsPage() {
 
         if (datePreset === 'LAST_7_DAYS') {
           try {
-            const bDate = new Date(`${b.date}T00:00:00`);
-            const diffDays = (bDate.getTime() - today.setHours(0,0,0,0)) / (1000 * 60 * 60 * 24);
+            const [by, bm, bd] = b.date.split('-').map(Number);
+            const bDateMs = new Date(by, bm - 1, bd).getTime();
+            const diffDays = (bDateMs - todayStart) / (1000 * 60 * 60 * 24);
             return diffDays >= -7 && diffDays <= 7;
           } catch {
             return false;
@@ -140,8 +142,9 @@ export default function MyBookingsPage() {
 
         if (datePreset === 'LAST_30_DAYS') {
           try {
-            const bDate = new Date(`${b.date}T00:00:00`);
-            const diffDays = (bDate.getTime() - today.setHours(0,0,0,0)) / (1000 * 60 * 60 * 24);
+            const [by, bm, bd] = b.date.split('-').map(Number);
+            const bDateMs = new Date(by, bm - 1, bd).getTime();
+            const diffDays = (bDateMs - todayStart) / (1000 * 60 * 60 * 24);
             return diffDays >= -30 && diffDays <= 30;
           } catch {
             return false;
@@ -150,8 +153,8 @@ export default function MyBookingsPage() {
 
         if (datePreset === 'THIS_MONTH') {
           try {
-            const bDate = new Date(`${b.date}T00:00:00`);
-            return bDate.getMonth() === currentMonth && bDate.getFullYear() === currentYear;
+            const [by, bm] = b.date.split('-').map(Number);
+            return (bm - 1) === currentMonth && by === currentYear;
           } catch {
             return false;
           }

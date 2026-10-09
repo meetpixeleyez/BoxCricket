@@ -43,6 +43,7 @@ interface SlotItem {
   tagLabel?: string;
   isBooked?: boolean;
   bookedBy?: string;
+  isPast?: boolean;
 }
 
 export const SlotPickerModal: React.FC<SlotPickerModalProps> = ({
@@ -122,6 +123,30 @@ export const SlotPickerModal: React.FC<SlotPickerModalProps> = ({
     const basePrice = activeBox?.basePrice || 800;
     const dateStr = selectedDate.dateStr;
 
+    // Helper to check if slot time is in the past for today or past dates
+    const isSlotPastTime = (slotId: string, startTime: string) => {
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = String(now.getMonth() + 1).padStart(2, '0');
+      const d = String(now.getDate()).padStart(2, '0');
+      const todayStr = `${y}-${m}-${d}`;
+
+      if (dateStr < todayStr) return true;
+      if (dateStr > todayStr) return false;
+
+      // Date is today - check current time in minutes
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+      const [sh, sm] = startTime.split(':').map(Number);
+      let slotStartMinutes = (sh || 0) * 60 + (sm || 0);
+
+      // Midnight end-of-day slot (00:00 - 01:00 AM) operates after 23:00 (11 PM)
+      if (slotId === 'slot_00_01' || (startTime === '00:00' && sh === 0)) {
+        slotStartMinutes = 24 * 60;
+      }
+
+      return slotStartMinutes <= currentMinutes;
+    };
+
     // Helper to check if slot is booked in live context state
     const isSlotBooked = (start: string, end: string) => {
       // Check existing bookings in context
@@ -160,7 +185,7 @@ export const SlotPickerModal: React.FC<SlotPickerModalProps> = ({
     };
 
     // Full schedule template
-    const rawSlots: Omit<SlotItem, 'isBooked' | 'bookedBy'>[] = [
+    const rawSlots: Omit<SlotItem, 'isBooked' | 'bookedBy' | 'isPast'>[] = [
       // Morning (06:00 - 12:00)
       { id: 'slot_06_07', startTime: '06:00', endTime: '07:00', price: basePrice - 100, label: '06:00 AM - 07:00 AM', category: 'morning', tagType: 'discount', tagLabel: 'Early Bird' },
       { id: 'slot_07_08', startTime: '07:00', endTime: '08:00', price: basePrice, label: '07:00 AM - 08:00 AM', category: 'morning', tagType: 'standard', tagLabel: 'Morning' },
@@ -191,7 +216,8 @@ export const SlotPickerModal: React.FC<SlotPickerModalProps> = ({
 
     return rawSlots.map(s => {
       const { isBooked, bookedBy } = isSlotBooked(s.startTime, s.endTime);
-      return { ...s, isBooked, bookedBy };
+      const isPast = isSlotPastTime(s.id, s.startTime);
+      return { ...s, isBooked, bookedBy, isPast };
     });
   }, [activeBox, selectedDate, bookings, offlineBlocks]);
 
@@ -215,7 +241,7 @@ export const SlotPickerModal: React.FC<SlotPickerModalProps> = ({
   if (!isOpen) return null;
 
   const toggleSlot = (slot: SlotItem) => {
-    if (slot.isBooked) return;
+    if (slot.isBooked || slot.isPast) return;
     if (selectedSlotIds.includes(slot.id)) {
       setSelectedSlotIds(prev => prev.filter(id => id !== slot.id));
     } else {
@@ -223,7 +249,7 @@ export const SlotPickerModal: React.FC<SlotPickerModalProps> = ({
     }
   };
 
-  const selectedSlotsList = slots.filter(s => selectedSlotIds.includes(s.id));
+  const selectedSlotsList = slots.filter(s => selectedSlotIds.includes(s.id) && !s.isBooked && !s.isPast);
   const totalAmount = selectedSlotsList.reduce((acc, s) => acc + s.price, 0);
   const advancePercent = ground.paymentSettings?.advanceValue || 30;
   const advancePayable = Math.round((totalAmount * advancePercent) / 100);
@@ -423,6 +449,9 @@ export const SlotPickerModal: React.FC<SlotPickerModalProps> = ({
                 <span className="flex items-center gap-1">
                   <span className="w-2 h-2 rounded-full bg-slate-300" /> Booked
                 </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-slate-400/60" /> Passed
+                </span>
               </div>
             </div>
 
@@ -466,18 +495,41 @@ export const SlotPickerModal: React.FC<SlotPickerModalProps> = ({
             {visibleSlots.map((s) => {
               const isSelected = selectedSlotIds.includes(s.id);
               const isBooked = s.isBooked;
+              const isPast = s.isPast;
+
+              if (isPast) {
+                return (
+                  <div
+                    key={s.id}
+                    className="p-3 rounded-2xl bg-slate-100/60 border border-slate-200/70 opacity-50 cursor-not-allowed select-none flex flex-col justify-between"
+                    title="This match timing has already passed for today"
+                  >
+                    <div className="flex items-center justify-between text-xs font-semibold text-slate-400">
+                      <span className="line-through">{s.label}</span>
+                      <Clock className="w-3.5 h-3.5 text-slate-400" />
+                    </div>
+                    <div className="flex items-center justify-between mt-2.5 pt-1.5 border-t border-slate-200/80 text-[10px] font-bold text-slate-400">
+                      <span className="line-through">₹{s.price}</span>
+                      <span className="bg-slate-200 px-2 py-0.5 rounded text-[9px] text-slate-500 font-bold uppercase tracking-wider">
+                        Passed
+                      </span>
+                    </div>
+                  </div>
+                );
+              }
 
               if (isBooked) {
                 return (
                   <div
                     key={s.id}
                     className="p-3 rounded-2xl bg-slate-100 border border-slate-200/80 opacity-60 cursor-not-allowed select-none flex flex-col justify-between"
+                    title="This slot has already been booked"
                   >
-                    <div className="flex items-center justify-between text-[11px] font-bold text-slate-400">
+                    <div className="flex items-center justify-between text-xs font-semibold text-slate-400">
                       <span className="line-through">{s.label}</span>
                       <Lock className="w-3.5 h-3.5 text-slate-400" />
                     </div>
-                    <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-slate-200 text-[10px] font-bold text-slate-500">
+                    <div className="flex items-center justify-between mt-2.5 pt-1.5 border-t border-slate-200 text-[10px] font-bold text-slate-500">
                       <span>₹{s.price}</span>
                       <span className="truncate max-w-[85px] bg-slate-200 px-1.5 py-0.5 rounded text-[9px] text-slate-600">
                         {s.bookedBy || 'Booked'}

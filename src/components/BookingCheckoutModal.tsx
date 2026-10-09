@@ -22,7 +22,7 @@ import {
   Share2
 } from 'lucide-react';
 import Link from 'next/link';
-import { formatSlotTimeRange, formatDateDisplay } from '@/lib/dateUtils';
+import { formatSlotTimeRange, formatDateDisplay, getTodayDateString } from '@/lib/dateUtils';
 
 export interface BookingCheckoutModalProps {
   isOpen?: boolean;
@@ -52,7 +52,7 @@ export const BookingCheckoutModal: React.FC<BookingCheckoutModalProps> = ({
   const { createBooking, currentUser } = useApp();
 
   const activeBox = bookingDetails?.box || box;
-  const date = bookingDetails?.date || propDate || new Date().toISOString().split('T')[0];
+  const date = bookingDetails?.date || propDate || getTodayDateString();
   const startTime = bookingDetails?.slots?.[0]?.startTime || propStartTime || '20:00';
   const endTime = bookingDetails?.slots?.[bookingDetails.slots.length - 1]?.endTime || propEndTime || '22:00';
   const totalAmount = bookingDetails?.totalAmount || propTotalAmount || 1800;

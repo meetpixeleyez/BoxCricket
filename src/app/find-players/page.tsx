@@ -31,6 +31,12 @@ import {
 import { AvailabilityPost, TeamPost } from '@/types';
 import { CreatePlayerPostModal } from '@/components/CreatePlayerPostModal';
 import { EditPlayerPostModal } from '@/components/EditPlayerPostModal';
+import { 
+  getTodayDateString, 
+  parseTimeToMinutes, 
+  isTimeWindowInPastForDate,
+  formatDateDisplay 
+} from '@/lib/dateUtils';
 
 type MainTab = 'NEED_TEAM' | 'NEED_PLAYERS' | 'MY_ACTIVITY';
 
@@ -46,62 +52,22 @@ export default function FindPlayersPage() {
     deleteTeamPost
   } = useApp();
 
-  // Helper date generators
-  const getTodayStr = () => new Date().toISOString().slice(0, 10);
-  const getTomorrowStr = () => {
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    return d.toISOString().slice(0, 10);
-  };
-  const getNext7DaysStr = () => {
-    const d = new Date();
-    d.setDate(d.getDate() + 7);
-    return d.toISOString().slice(0, 10);
-  };
-
-  const parseTimeToMinutes = (tStr: string): number => {
-    if (!tStr) return 0;
-    const match = tStr.trim().match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
-    if (!match) return 0;
-    let hours = parseInt(match[1], 10);
-    const minutes = parseInt(match[2], 10);
-    const meridian = match[3]?.toUpperCase();
-
-    if (meridian === 'PM' && hours < 12) hours += 12;
-    if (meridian === 'AM' && hours === 12) hours = 0;
-
-    return hours * 60 + minutes;
-  };
+  // Helper date generators (Local-safe, prevents UTC midnight skew)
+  const getTodayStr = () => getTodayDateString(0);
+  const getTomorrowStr = () => getTodayDateString(1);
+  const getNext7DaysStr = () => getTodayDateString(7);
 
   // Helper: check if post date & time window is expired (past)
   const isPostDateTimeExpired = (dateStr?: string, timeStr?: string): boolean => {
-    if (!dateStr) return false;
-    const now = new Date();
-    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-
-    if (dateStr < todayStr) return true;
-    if (dateStr > todayStr) return false;
-
-    if (!timeStr) return false;
-
+    if (!dateStr || !timeStr) return false;
+    let startTimeStr = timeStr;
     let endTimeStr = timeStr;
-    let startTimeStr = '';
     if (timeStr.includes('-')) {
       const parts = timeStr.split('-').map(s => s.trim());
       startTimeStr = parts[0];
       endTimeStr = parts[1] || parts[0];
     }
-
-    const startMinutes = parseTimeToMinutes(startTimeStr);
-    const endMinutes = parseTimeToMinutes(endTimeStr);
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
-
-    // Overnight slot (e.g. 11:00 PM to 02:00 AM)
-    if (endMinutes < startMinutes && startMinutes > 720) {
-      return false; // Still active for tonight
-    }
-
-    return currentMinutes > endMinutes;
+    return isTimeWindowInPastForDate(dateStr, startTimeStr, endTimeStr);
   };
 
   // Dynamically extract ONLY unique localities that have registered active box cricket turfs

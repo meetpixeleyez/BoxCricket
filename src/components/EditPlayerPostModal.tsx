@@ -13,10 +13,20 @@ import {
   Save,
   Search,
   Phone,
-  ChevronDown
+  ChevronDown,
+  AlertCircle,
+  Sparkles
 } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { AvailabilityPost, TeamPost, PlayingRole } from '@/types';
+import { 
+  getTodayDateString, 
+  isTimeInPastForDate, 
+  isTimeWindowInPastForDate,
+  isSameOrInvalidTimeRange,
+  suggestEndTime,
+  TIME_SLOTS_12H
+} from '@/lib/dateUtils';
 
 interface EditPlayerPostModalProps {
   isOpen: boolean;
@@ -25,17 +35,6 @@ interface EditPlayerPostModalProps {
   soloPost?: AvailabilityPost | null;
   teamPost?: TeamPost | null;
 }
-
-const TIME_SLOTS_12H = [
-  '12:00 AM', '12:30 AM', '01:00 AM', '01:30 AM', '02:00 AM', '02:30 AM',
-  '03:00 AM', '03:30 AM', '04:00 AM', '04:30 AM', '05:00 AM', '05:30 AM',
-  '06:00 AM', '06:30 AM', '07:00 AM', '07:30 AM', '08:00 AM', '08:30 AM',
-  '09:00 AM', '09:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM',
-  '12:00 PM', '12:30 PM', '01:00 PM', '01:30 PM', '02:00 PM', '02:30 PM',
-  '03:00 PM', '03:30 PM', '04:00 PM', '04:30 PM', '05:00 PM', '05:30 PM',
-  '06:00 PM', '06:30 PM', '07:00 PM', '07:30 PM', '08:00 PM', '08:30 PM',
-  '09:00 PM', '09:30 PM', '10:00 PM', '10:30 PM', '11:00 PM', '11:30 PM'
-];
 
 const cleanPhoneNumber = (ph?: string) => {
   if (!ph) return '';
@@ -89,35 +88,55 @@ export const EditPlayerPostModal: React.FC<EditPlayerPostModalProps> = ({
   const [soloFromTime, setSoloFromTime] = useState('08:00 PM');
   const [soloToTime, setSoloToTime] = useState('11:00 PM');
 
+  const todayStr = useMemo(() => getTodayDateString(), []);
+
   const [isSaved, setIsSaved] = useState(false);
 
   // Sync state when modal opens
   useEffect(() => {
     if (!isOpen) return;
 
+    const currentToday = getTodayDateString();
+
     if (postType === 'TEAM' && teamPost) {
       setTeamName(teamPost.teamName || '');
       setNeededPlayers(teamPost.neededPlayers || 1);
       const matchGround = grounds.find(g => g.name.toLowerCase() === teamPost.groundName.toLowerCase());
       setSelectedGroundId(matchGround ? matchGround.id : grounds[0]?.id || '');
-      setTeamDate(teamPost.date || new Date().toISOString().slice(0, 10));
+      
+      // If date is in past, default to today
+      const validDate = teamPost.date && teamPost.date >= currentToday ? teamPost.date : currentToday;
+      setTeamDate(validDate);
       setContactPhone(cleanPhoneNumber(teamPost.captainPhone || currentUser.phone));
 
       if (teamPost.time && teamPost.time.includes('-')) {
         const parts = teamPost.time.split('-').map(s => s.trim());
-        if (parts[0]) setTeamFromTime(parts[0]);
-        if (parts[1]) setTeamToTime(parts[1]);
+        const from = parts[0] || '09:00 PM';
+        let to = parts[1] || '11:00 PM';
+        if (from === to || isSameOrInvalidTimeRange(from, to).isInvalid) {
+          to = suggestEndTime(from, 2);
+        }
+        setTeamFromTime(from);
+        setTeamToTime(to);
       }
     } else if (postType === 'SOLO' && soloPost) {
       setPlayerRole(soloPost.role || 'ALL_ROUNDER');
       setCenterArea(soloPost.centerArea || 'Mota Varachha');
-      setSoloDate(soloPost.date || new Date().toISOString().slice(0, 10));
+      
+      // If date is in past, default to today
+      const validDate = soloPost.date && soloPost.date >= currentToday ? soloPost.date : currentToday;
+      setSoloDate(validDate);
       setContactPhone(cleanPhoneNumber(soloPost.playerPhone || currentUser.phone));
 
       if (soloPost.timeWindow && soloPost.timeWindow.includes('-')) {
         const parts = soloPost.timeWindow.split('-').map(s => s.trim());
-        if (parts[0]) setSoloFromTime(parts[0]);
-        if (parts[1]) setSoloToTime(parts[1]);
+        const from = parts[0] || '08:00 PM';
+        let to = parts[1] || '11:00 PM';
+        if (from === to || isSameOrInvalidTimeRange(from, to).isInvalid) {
+          to = suggestEndTime(from, 2);
+        }
+        setSoloFromTime(from);
+        setSoloToTime(to);
       }
     }
   }, [isOpen, postType, soloPost, teamPost, grounds, currentUser.phone]);
@@ -141,10 +160,53 @@ export const EditPlayerPostModal: React.FC<EditPlayerPostModalProps> = ({
     return registeredBoxAreas.filter(loc => loc.toLowerCase().includes(areaSearchQuery.toLowerCase().trim()));
   }, [registeredBoxAreas, areaSearchQuery]);
 
+  // Validation: Check if the currently selected time window has passed or is invalid
+  const isTimeExpired = useMemo(() => {
+    if (postType === 'TEAM') {
+      return isTimeWindowInPastForDate(teamDate, teamFromTime, teamToTime);
+    } else {
+      return isTimeWindowInPastForDate(soloDate, soloFromTime, soloToTime);
+    }
+  }, [postType, teamDate, teamFromTime, teamToTime, soloDate, soloFromTime, soloToTime]);
+
+  const isSameTime = useMemo(() => {
+    if (postType === 'TEAM') {
+      return teamFromTime.trim() === teamToTime.trim();
+    } else {
+      return soloFromTime.trim() === soloToTime.trim();
+    }
+  }, [postType, teamFromTime, teamToTime, soloFromTime, soloToTime]);
+
+  const timeRangeError = useMemo(() => {
+    if (postType === 'TEAM') {
+      return isSameOrInvalidTimeRange(teamFromTime, teamToTime);
+    } else {
+      return isSameOrInvalidTimeRange(soloFromTime, soloToTime);
+    }
+  }, [postType, teamFromTime, teamToTime, soloFromTime, soloToTime]);
+
+  const hasTimingError = isTimeExpired || isSameTime || timeRangeError.isInvalid;
+
+  const handleSoloFromTimeChange = (newFrom: string) => {
+    setSoloFromTime(newFrom);
+    if (soloToTime === newFrom || isSameOrInvalidTimeRange(newFrom, soloToTime).isInvalid) {
+      setSoloToTime(suggestEndTime(newFrom, 2));
+    }
+  };
+
+  const handleTeamFromTimeChange = (newFrom: string) => {
+    setTeamFromTime(newFrom);
+    if (teamToTime === newFrom || isSameOrInvalidTimeRange(newFrom, teamToTime).isInvalid) {
+      setTeamToTime(suggestEndTime(newFrom, 2));
+    }
+  };
+
   if (!isOpen) return null;
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
+    if (hasTimingError) return;
+
     const finalPhone = contactPhone.trim() || currentUser.phone;
 
     if (postType === 'TEAM' && teamPost) {
@@ -343,44 +405,122 @@ export const EditPlayerPostModal: React.FC<EditPlayerPostModalProps> = ({
                   </div>
 
                   {/* 4. Match Date & Time Range */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-700 block">
-                        Match Date
+                  <div className="space-y-2.5 p-3 rounded-2xl bg-slate-50 border border-slate-200/80">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 block mb-1 flex items-center gap-1">
+                        <Calendar className="w-3 h-3 text-emerald-600" />
+                        Match Date *
                       </label>
                       <input
                         type="date"
+                        min={todayStr}
                         value={teamDate}
                         onChange={(e) => setTeamDate(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 text-slate-900 p-2.5 rounded-2xl text-xs font-semibold focus:outline-none focus:border-emerald-600"
+                        className="w-full bg-white border border-slate-200 text-slate-900 p-2.5 rounded-xl text-xs font-semibold focus:outline-none focus:border-emerald-600"
                       />
                     </div>
 
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-700 block">
-                        Timing
-                      </label>
-                      <div className="grid grid-cols-2 gap-1">
+                    <div className="grid grid-cols-2 gap-2 pt-1">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500 block mb-1 flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-emerald-600" />
+                          From Time
+                        </label>
                         <select
                           value={teamFromTime}
-                          onChange={(e) => setTeamFromTime(e.target.value)}
-                          className="bg-slate-50 border border-slate-200 text-slate-900 p-2 rounded-xl text-[11px] font-semibold focus:outline-none"
+                          onChange={(e) => handleTeamFromTimeChange(e.target.value)}
+                          className="w-full bg-white border border-slate-200 text-slate-900 p-2 rounded-xl text-[11px] font-semibold focus:outline-none focus:border-emerald-600 cursor-pointer"
                         >
-                          {TIME_SLOTS_12H.map(slot => (
-                            <option key={slot} value={slot}>{slot}</option>
-                          ))}
+                          {TIME_SLOTS_12H.map(slot => {
+                            const isPast = isTimeInPastForDate(teamDate, slot);
+                            return (
+                              <option 
+                                key={slot} 
+                                value={slot}
+                                disabled={isPast}
+                                className={isPast ? 'text-slate-400 bg-slate-100' : ''}
+                              >
+                                {slot}{isPast ? ' (Passed)' : ''}
+                              </option>
+                            );
+                          })}
                         </select>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500 block mb-1 flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-emerald-600" />
+                          To Time
+                        </label>
                         <select
                           value={teamToTime}
                           onChange={(e) => setTeamToTime(e.target.value)}
-                          className="bg-slate-50 border border-slate-200 text-slate-900 p-2 rounded-xl text-[11px] font-semibold focus:outline-none"
+                          className="w-full bg-white border border-slate-200 text-slate-900 p-2 rounded-xl text-[11px] font-semibold focus:outline-none focus:border-emerald-600 cursor-pointer"
                         >
-                          {TIME_SLOTS_12H.map(slot => (
-                            <option key={slot} value={slot}>{slot}</option>
-                          ))}
+                          {TIME_SLOTS_12H.map(slot => {
+                            const isPast = isTimeInPastForDate(teamDate, slot);
+                            const isSame = slot === teamFromTime;
+                            const isDisabled = isPast || isSame;
+                            return (
+                              <option 
+                                key={slot} 
+                                value={slot}
+                                disabled={isDisabled}
+                                className={isDisabled ? 'text-slate-400 bg-slate-100' : ''}
+                              >
+                                {slot}{isSame ? ' (Same as start)' : isPast ? ' (Passed)' : ''}
+                              </option>
+                            );
+                          })}
                         </select>
                       </div>
                     </div>
+
+                    {/* Quick Presets for Team Match */}
+                    <div className="flex items-center space-x-1.5 pt-1 overflow-x-auto no-scrollbar">
+                      {[
+                        { label: 'Night (8 - 11 PM)', from: '08:00 PM', to: '11:00 PM' },
+                        { label: 'Late Night (11 PM - 2 AM)', from: '11:00 PM', to: '02:00 AM' },
+                        { label: 'Overnight (2 - 5 AM)', from: '02:00 AM', to: '05:00 AM' },
+                        { label: 'Morning (6 - 9 AM)', from: '06:00 AM', to: '09:00 AM' },
+                        { label: 'Evening (5 - 8 PM)', from: '05:00 PM', to: '08:00 PM' },
+                      ].map(p => (
+                        <button
+                          key={p.label}
+                          type="button"
+                          onClick={() => {
+                            setTeamFromTime(p.from);
+                            setTeamToTime(p.to);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-[10.5px] font-bold text-slate-600 hover:bg-slate-100 hover:text-slate-900 flex-shrink-0 cursor-pointer transition-colors"
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Timing Warning / Error Card for Team Requirement */}
+                    {hasTimingError && (
+                      <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 text-xs flex items-start space-x-2.5 animate-in fade-in duration-200">
+                        <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <div className="font-bold">
+                            {isSameTime 
+                              ? 'Start and End Times Cannot Be Identical' 
+                              : isTimeExpired 
+                              ? 'Match Timing Expired' 
+                              : 'Invalid Match Time Range'}
+                          </div>
+                          <div className="text-[11px] text-amber-800 mt-0.5 leading-snug">
+                            {isSameTime 
+                              ? `From Time and To Time are both set to ${teamFromTime}. Please select a different End Time to specify match duration.` 
+                              : isTimeExpired 
+                              ? `The selected time window (${teamFromTime} - ${teamToTime}) has already passed for ${teamDate === todayStr ? 'Today' : teamDate}. Please choose an upcoming timing above or tap a preset.` 
+                              : (timeRangeError.errorMsg || 'Please select a valid time window where End Time is after Start Time.')}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -476,50 +616,123 @@ export const EditPlayerPostModal: React.FC<EditPlayerPostModalProps> = ({
                     )}
                   </div>
 
-                  {/* 3. Match Date */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700 block">
-                      Match Date
-                    </label>
-                    <input
-                      type="date"
-                      value={soloDate}
-                      onChange={(e) => setSoloDate(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 text-slate-900 p-2.5 rounded-2xl text-xs font-semibold focus:outline-none focus:border-emerald-600"
-                    />
-                  </div>
+                  {/* 3. Match Date & Time Window */}
+                  <div className="space-y-2.5 p-3 rounded-2xl bg-slate-50 border border-slate-200/80">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 block mb-1 flex items-center gap-1">
+                        <Calendar className="w-3 h-3 text-emerald-600" />
+                        Match Date *
+                      </label>
+                      <input
+                        type="date"
+                        min={todayStr}
+                        value={soloDate}
+                        onChange={(e) => setSoloDate(e.target.value)}
+                        className="w-full bg-white border border-slate-200 text-slate-900 p-2.5 rounded-xl text-xs font-semibold focus:outline-none focus:border-emerald-600"
+                      />
+                    </div>
 
-                  {/* 4. Available Timing */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700 block">
-                      Available Timing Window
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 gap-2 pt-1">
                       <div>
-                        <span className="text-[10px] text-slate-400 block mb-0.5">From</span>
+                        <label className="text-[10px] font-bold text-slate-500 block mb-1 flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-emerald-600" />
+                          From Time
+                        </label>
                         <select
                           value={soloFromTime}
-                          onChange={(e) => setSoloFromTime(e.target.value)}
-                          className="w-full bg-slate-50 border border-slate-200 text-slate-900 p-2.5 rounded-xl text-xs font-semibold focus:outline-none"
+                          onChange={(e) => handleSoloFromTimeChange(e.target.value)}
+                          className="w-full bg-white border border-slate-200 text-slate-900 p-2.5 rounded-xl text-xs font-semibold focus:outline-none focus:border-emerald-600 cursor-pointer"
                         >
-                          {TIME_SLOTS_12H.map(slot => (
-                            <option key={slot} value={slot}>{slot}</option>
-                          ))}
+                          {TIME_SLOTS_12H.map(slot => {
+                            const isPast = isTimeInPastForDate(soloDate, slot);
+                            return (
+                              <option 
+                                key={slot} 
+                                value={slot}
+                                disabled={isPast}
+                                className={isPast ? 'text-slate-400 bg-slate-100' : ''}
+                              >
+                                {slot}{isPast ? ' (Passed)' : ''}
+                              </option>
+                            );
+                          })}
                         </select>
                       </div>
+
                       <div>
-                        <span className="text-[10px] text-slate-400 block mb-0.5">To</span>
+                        <label className="text-[10px] font-bold text-slate-500 block mb-1 flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-emerald-600" />
+                          To Time
+                        </label>
                         <select
                           value={soloToTime}
                           onChange={(e) => setSoloToTime(e.target.value)}
-                          className="w-full bg-slate-50 border border-slate-200 text-slate-900 p-2.5 rounded-xl text-xs font-semibold focus:outline-none"
+                          className="w-full bg-white border border-slate-200 text-slate-900 p-2.5 rounded-xl text-xs font-semibold focus:outline-none focus:border-emerald-600 cursor-pointer"
                         >
-                          {TIME_SLOTS_12H.map(slot => (
-                            <option key={slot} value={slot}>{slot}</option>
-                          ))}
+                          {TIME_SLOTS_12H.map(slot => {
+                            const isPast = isTimeInPastForDate(soloDate, slot);
+                            const isSame = slot === soloFromTime;
+                            const isDisabled = isPast || isSame;
+                            return (
+                              <option 
+                                key={slot} 
+                                value={slot}
+                                disabled={isDisabled}
+                                className={isDisabled ? 'text-slate-400 bg-slate-100' : ''}
+                              >
+                                {slot}{isSame ? ' (Same as start)' : isPast ? ' (Passed)' : ''}
+                              </option>
+                            );
+                          })}
                         </select>
                       </div>
                     </div>
+
+                    {/* Quick Presets for Solo Availability */}
+                    <div className="flex items-center space-x-1.5 pt-1 overflow-x-auto no-scrollbar">
+                      {[
+                        { label: 'Night (8 - 11 PM)', from: '08:00 PM', to: '11:00 PM' },
+                        { label: 'Late Night (11 PM - 2 AM)', from: '11:00 PM', to: '02:00 AM' },
+                        { label: 'Overnight (2 - 5 AM)', from: '02:00 AM', to: '05:00 AM' },
+                        { label: 'Morning (6 - 9 AM)', from: '06:00 AM', to: '09:00 AM' },
+                        { label: 'Evening (5 - 8 PM)', from: '05:00 PM', to: '08:00 PM' },
+                      ].map(p => (
+                        <button
+                          key={p.label}
+                          type="button"
+                          onClick={() => {
+                            setSoloFromTime(p.from);
+                            setSoloToTime(p.to);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-[10.5px] font-bold text-slate-600 hover:bg-slate-100 hover:text-slate-900 flex-shrink-0 cursor-pointer transition-colors"
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Timing Warning / Error Card for Solo Availability */}
+                    {hasTimingError && (
+                      <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 text-xs flex items-start space-x-2.5 animate-in fade-in duration-200">
+                        <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <div className="font-bold">
+                            {isSameTime 
+                              ? 'Start and End Times Cannot Be Identical' 
+                              : isTimeExpired 
+                              ? 'Match Timing Expired' 
+                              : 'Invalid Match Time Range'}
+                          </div>
+                          <div className="text-[11px] text-amber-800 mt-0.5 leading-snug">
+                            {isSameTime 
+                              ? `From Time and To Time are both set to ${soloFromTime}. Please select a different End Time (e.g. 1-2 hours later) to establish match duration.` 
+                              : isTimeExpired 
+                              ? `The selected time window (${soloFromTime} - ${soloToTime}) has already passed for ${soloDate === todayStr ? 'Today' : soloDate}. Please choose an upcoming timing above or tap a preset.` 
+                              : (timeRangeError.errorMsg || 'Please select a valid time window where End Time is after Start Time.')}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -566,10 +779,19 @@ export const EditPlayerPostModal: React.FC<EditPlayerPostModalProps> = ({
               <div className="pt-2">
                 <button
                   type="submit"
-                  className="w-full py-3.5 stitch-btn-orange text-xs font-bold rounded-2xl shadow-lg flex items-center justify-center space-x-2 cursor-pointer"
+                  disabled={hasTimingError}
+                  className="w-full py-3.5 stitch-btn-orange text-xs font-bold rounded-2xl shadow-lg flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <Save className="w-4 h-4" />
-                  <span>Save & Update Live Post</span>
+                  <span>
+                    {isSameTime 
+                      ? 'Select Different End Time' 
+                      : isTimeExpired 
+                      ? 'Select Upcoming Timing to Save' 
+                      : hasTimingError 
+                      ? 'Select Valid Match Timing' 
+                      : 'Save & Update Live Post'}
+                  </span>
                 </button>
               </div>
             </>

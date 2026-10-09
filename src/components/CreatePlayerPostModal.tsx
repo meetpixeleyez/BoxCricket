@@ -16,10 +16,18 @@ import {
   Send,
   Zap,
   Phone,
-  Search
+  Search,
+  AlertCircle
 } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { PlayingRole } from '@/types';
+import { 
+  getTodayDateString, 
+  isTimeInPastForDate, 
+  isTimeWindowInPastForDate,
+  suggestEndTime,
+  isSameOrInvalidTimeRange
+} from '@/lib/dateUtils';
 
 interface CreatePlayerPostModalProps {
   isOpen: boolean;
@@ -94,11 +102,10 @@ export const CreatePlayerPostModal: React.FC<CreatePlayerPostModalProps> = ({
     return firstGroundArea || registeredBoxAreas[0] || 'Mota Varachha';
   });
   
+  const todayStr = useMemo(() => getTodayDateString(), []);
+
   // Custom Date & Time Range
-  const [date, setDate] = useState<string>(() => {
-    const today = new Date();
-    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-  });
+  const [date, setDate] = useState<string>(() => getTodayDateString());
   const [fromTime, setFromTime] = useState('08:00 PM');
   const [toTime, setToTime] = useState('11:00 PM');
 
@@ -113,14 +120,52 @@ export const CreatePlayerPostModal: React.FC<CreatePlayerPostModalProps> = ({
   const [groundSearchQuery, setGroundSearchQuery] = useState('');
   
   const [neededPlayers, setNeededPlayers] = useState(2);
-  const [teamDate, setTeamDate] = useState<string>(() => {
-    const today = new Date();
-    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-  });
+  const [teamDate, setTeamDate] = useState<string>(() => getTodayDateString());
   const [teamFromTime, setTeamFromTime] = useState('09:00 PM');
   const [teamToTime, setTeamToTime] = useState('11:00 PM');
 
   const [isSuccess, setIsSuccess] = useState(false);
+
+  // Validation: Check if the currently selected time window has passed
+  const isTimeExpired = useMemo(() => {
+    if (mode === 'NEED_TEAM') {
+      return isTimeWindowInPastForDate(date, fromTime, toTime);
+    } else {
+      return isTimeWindowInPastForDate(teamDate, teamFromTime, teamToTime);
+    }
+  }, [mode, date, fromTime, toTime, teamDate, teamFromTime, teamToTime]);
+
+  const isSameTime = useMemo(() => {
+    if (mode === 'NEED_TEAM') {
+      return fromTime.trim() === toTime.trim();
+    } else {
+      return teamFromTime.trim() === teamToTime.trim();
+    }
+  }, [mode, fromTime, toTime, teamFromTime, teamToTime]);
+
+  const timeRangeError = useMemo(() => {
+    if (mode === 'NEED_TEAM') {
+      return isSameOrInvalidTimeRange(fromTime, toTime);
+    } else {
+      return isSameOrInvalidTimeRange(teamFromTime, teamToTime);
+    }
+  }, [mode, fromTime, toTime, teamFromTime, teamToTime]);
+
+  const hasTimingError = isTimeExpired || isSameTime || timeRangeError.isInvalid;
+
+  const handleSoloFromTimeChange = (newFrom: string) => {
+    setFromTime(newFrom);
+    if (toTime === newFrom || isSameOrInvalidTimeRange(newFrom, toTime).isInvalid) {
+      setToTime(suggestEndTime(newFrom, 2));
+    }
+  };
+
+  const handleTeamFromTimeChange = (newFrom: string) => {
+    setTeamFromTime(newFrom);
+    if (teamToTime === newFrom || isSameOrInvalidTimeRange(newFrom, teamToTime).isInvalid) {
+      setTeamToTime(suggestEndTime(newFrom, 2));
+    }
+  };
 
   // Sync contact phone if user object loads or modal reopens
   useEffect(() => {
@@ -155,6 +200,7 @@ export const CreatePlayerPostModal: React.FC<CreatePlayerPostModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (hasTimingError) return;
 
     const finalPhone = contactPhone.trim() || currentUser.phone;
 
@@ -324,6 +370,7 @@ export const CreatePlayerPostModal: React.FC<CreatePlayerPostModalProps> = ({
                   <input
                     type="date"
                     required
+                    min={todayStr}
                     value={date}
                     onChange={(e) => setDate(e.target.value)}
                     className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:border-emerald-600"
@@ -338,12 +385,22 @@ export const CreatePlayerPostModal: React.FC<CreatePlayerPostModalProps> = ({
                     </label>
                     <select
                       value={fromTime}
-                      onChange={(e) => setFromTime(e.target.value)}
+                      onChange={(e) => handleSoloFromTimeChange(e.target.value)}
                       className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:border-emerald-600 cursor-pointer"
                     >
-                      {TIME_SLOTS_12H.map(slot => (
-                        <option key={slot} value={slot}>{slot}</option>
-                      ))}
+                      {TIME_SLOTS_12H.map(slot => {
+                        const isPast = isTimeInPastForDate(date, slot);
+                        return (
+                          <option 
+                            key={slot} 
+                            value={slot}
+                            disabled={isPast}
+                            className={isPast ? 'text-slate-400 bg-slate-100' : ''}
+                          >
+                            {slot}{isPast ? ' (Passed)' : ''}
+                          </option>
+                        );
+                      })}
                     </select>
                   </div>
 
@@ -357,9 +414,21 @@ export const CreatePlayerPostModal: React.FC<CreatePlayerPostModalProps> = ({
                       onChange={(e) => setToTime(e.target.value)}
                       className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:border-emerald-600 cursor-pointer"
                     >
-                      {TIME_SLOTS_12H.map(slot => (
-                        <option key={slot} value={slot}>{slot}</option>
-                      ))}
+                      {TIME_SLOTS_12H.map(slot => {
+                        const isPast = isTimeInPastForDate(date, slot);
+                        const isSame = slot === fromTime;
+                        const isDisabled = isPast || isSame;
+                        return (
+                          <option 
+                            key={slot} 
+                            value={slot}
+                            disabled={isDisabled}
+                            className={isDisabled ? 'text-slate-400 bg-slate-100' : ''}
+                          >
+                            {slot}{isPast ? ' (Passed)' : isSame ? ' (Same as start)' : ''}
+                          </option>
+                        );
+                      })}
                     </select>
                   </div>
                 </div>
@@ -386,6 +455,27 @@ export const CreatePlayerPostModal: React.FC<CreatePlayerPostModalProps> = ({
                     </button>
                   ))}
                 </div>
+
+                {/* Timing Warning / Error Alert */}
+                {hasTimingError && (
+                  <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 text-xs flex items-start space-x-2.5 animate-in fade-in duration-200">
+                    <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <div className="font-bold">
+                        {isSameTime 
+                          ? 'Invalid Time Duration' 
+                          : (isTimeExpired ? 'Match Timing Expired' : 'Invalid Match Timing')}
+                      </div>
+                      <div className="text-[11px] text-amber-800 mt-0.5 leading-snug">
+                        {isSameTime
+                          ? 'Start time and End time cannot be identical (e.g. 10:30 AM to 10:30 AM). Please select an end time that gives at least 1 hour of playing time.'
+                          : isTimeExpired
+                          ? `The selected time window (${fromTime} - ${toTime}) has already passed for ${date === todayStr ? 'Today' : date}. Please choose an upcoming timing above to publish live.`
+                          : (timeRangeError.errorMsg || 'Please select a valid time range for your match.')}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Searchable Area Dropdown */}
@@ -623,6 +713,7 @@ export const CreatePlayerPostModal: React.FC<CreatePlayerPostModalProps> = ({
                   <input
                     type="date"
                     required
+                    min={todayStr}
                     value={teamDate}
                     onChange={(e) => setTeamDate(e.target.value)}
                     className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:border-emerald-600"
@@ -637,12 +728,22 @@ export const CreatePlayerPostModal: React.FC<CreatePlayerPostModalProps> = ({
                     </label>
                     <select
                       value={teamFromTime}
-                      onChange={(e) => setTeamFromTime(e.target.value)}
+                      onChange={(e) => handleTeamFromTimeChange(e.target.value)}
                       className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:border-emerald-600 cursor-pointer"
                     >
-                      {TIME_SLOTS_12H.map(s => (
-                        <option key={s} value={s}>{s}</option>
-                      ))}
+                      {TIME_SLOTS_12H.map(s => {
+                        const isPast = isTimeInPastForDate(teamDate, s);
+                        return (
+                          <option 
+                            key={s} 
+                            value={s}
+                            disabled={isPast}
+                            className={isPast ? 'text-slate-400 bg-slate-100' : ''}
+                          >
+                            {s}{isPast ? ' (Passed)' : ''}
+                          </option>
+                        );
+                      })}
                     </select>
                   </div>
 
@@ -656,9 +757,21 @@ export const CreatePlayerPostModal: React.FC<CreatePlayerPostModalProps> = ({
                       onChange={(e) => setTeamToTime(e.target.value)}
                       className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:border-emerald-600 cursor-pointer"
                     >
-                      {TIME_SLOTS_12H.map(s => (
-                        <option key={s} value={s}>{s}</option>
-                      ))}
+                      {TIME_SLOTS_12H.map(s => {
+                        const isPast = isTimeInPastForDate(teamDate, s);
+                        const isSame = s === teamFromTime;
+                        const isDisabled = isPast || isSame;
+                        return (
+                          <option 
+                            key={s} 
+                            value={s}
+                            disabled={isDisabled}
+                            className={isDisabled ? 'text-slate-400 bg-slate-100' : ''}
+                          >
+                            {s}{isPast ? ' (Passed)' : isSame ? ' (Same as start)' : ''}
+                          </option>
+                        );
+                      })}
                     </select>
                   </div>
                 </div>
@@ -685,6 +798,27 @@ export const CreatePlayerPostModal: React.FC<CreatePlayerPostModalProps> = ({
                     </button>
                   ))}
                 </div>
+
+                {/* Expired / Timing Warning Card for Team Requirement */}
+                {hasTimingError && (
+                  <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-950 text-xs flex items-start space-x-2.5 animate-in fade-in duration-200">
+                    <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <div className="font-bold">
+                        {isSameTime 
+                          ? 'Invalid Time Duration' 
+                          : (isTimeExpired ? 'Match Timing Expired' : 'Invalid Match Timing')}
+                      </div>
+                      <div className="text-[11px] text-amber-800 mt-0.5 leading-snug">
+                        {isSameTime
+                          ? 'Start time and End time cannot be identical (e.g. 10:30 AM to 10:30 AM). Please select an end time that gives at least 1 hour of playing time.'
+                          : isTimeExpired
+                          ? `The selected time window (${teamFromTime} - ${teamToTime}) has already passed for ${teamDate === todayStr ? 'Today' : teamDate}. Please choose an upcoming timing above to publish live.`
+                          : (timeRangeError.errorMsg || 'Please select a valid time range for your match.')}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </>
           )}
@@ -733,10 +867,17 @@ export const CreatePlayerPostModal: React.FC<CreatePlayerPostModalProps> = ({
           {!isSuccess && (
             <button
               type="submit"
-              className="w-full py-3.5 stitch-btn-orange text-xs flex items-center justify-center space-x-2 font-bold shadow-lg shadow-orange-500/25 cursor-pointer mt-2"
+              disabled={hasTimingError}
+              className="w-full py-3.5 stitch-btn-orange text-xs flex items-center justify-center space-x-2 font-bold shadow-lg shadow-orange-500/25 cursor-pointer mt-2 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Send className="w-4 h-4" />
-              <span>{mode === 'NEED_TEAM' ? 'Publish Availability Post' : 'Publish Team Requirement'}</span>
+              <span>
+                {isSameTime 
+                  ? 'Select Different End Time'
+                  : isTimeExpired 
+                  ? 'Select Upcoming Timing to Publish' 
+                  : (mode === 'NEED_TEAM' ? 'Publish Availability Post' : 'Publish Team Requirement')}
+              </span>
             </button>
           )}
 
